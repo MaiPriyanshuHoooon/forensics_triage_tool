@@ -11,22 +11,47 @@ import shutil
 def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
     """
     Generate HTML header with modern LEA-focused dark theme UI
+    Embeds CSS and JS inline for single-file portability
 
     Args:
         timestamp: Report generation timestamp
-        assets_path: Path to assets folder (CSS/JS)
+        assets_path: Path to assets folder (CSS/JS) - used to read files for embedding
         os_type: Operating system type (Windows/Linux/macOS)
 
     Returns:
-        HTML header string
+        HTML header string with embedded CSS
     """
+    import os
+
+    # Read CSS file
+    css_content = ""
+    css_path = os.path.join(os.path.dirname(__file__), "..", "assets", "styles.css")
+    try:
+        with open(css_path, 'r', encoding='utf-8') as f:
+            css_content = f.read()
+    except Exception as e:
+        print(f"Warning: Could not read CSS file: {e}")
+        css_content = "/* CSS file not found */"
+
+    # Read JS file
+    js_content = ""
+    js_path = os.path.join(os.path.dirname(__file__), "..", "assets", "script.js")
+    try:
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+    except Exception as e:
+        print(f"Warning: Could not read JS file: {e}")
+        js_content = "// JS file not found"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LEA Forensic Triage - {timestamp}</title>
-    <link rel="stylesheet" href="{assets_path}/styles.css">
+    <style>
+{css_content}
+    </style>
 </head>
 <body>
     <div class="app-container">
@@ -134,14 +159,26 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
 
 def generate_html_footer(assets_path="../assets"):
     """
-    Generate HTML footer with JavaScript
+    Generate HTML footer with JavaScript embedded inline
 
     Args:
-        assets_path: Path to assets folder (CSS/JS)
+        assets_path: Path to assets folder (CSS/JS) - used to read files for embedding
 
     Returns:
-        HTML footer string
+        HTML footer string with embedded JavaScript
     """
+    import os
+
+    # Read JS file for inline embedding
+    js_content = ""
+    js_path = os.path.join(os.path.dirname(__file__), "..", "assets", "script.js")
+    try:
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+    except Exception as e:
+        print(f"Warning: Could not read JS file: {e}")
+        js_content = "// JS file not found"
+
     return f"""
         </main>
 
@@ -160,29 +197,22 @@ def generate_html_footer(assets_path="../assets"):
         </footer>
     </div>
 
-    <script src="{assets_path}/script.js"></script>
+    <script>
+{js_content}
+    </script>
 </body>
 </html>
 """
 
 
-def copy_assets_to_report(report_path):
-    """
-    Copy assets folder to report directory
-
-    Args:
-        report_path: Path to the report folder
-    """
-    # Get the directory where this script is located
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    assets_source = os.path.join(script_dir, "assets")
-    assets_dest = os.path.join(report_path, "assets")
-
-    # Copy the entire assets folder
-    if os.path.exists(assets_source):
-        shutil.copytree(assets_source, assets_dest, dirs_exist_ok=True)
-        return True
-    return False
+# ============================================================================
+# DEPRECATED: Assets are now embedded inline, no copying needed
+# ============================================================================
+# def copy_assets_to_report(report_path):
+#     """
+#     Copy assets folder to report directory (DEPRECATED - assets now embedded inline)
+#     """
+#     pass
 
 
 def generate_threat_dashboard(threat_data):

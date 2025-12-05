@@ -26,7 +26,6 @@ from core.parsers import parse_to_table, escape_html, parse_regex_analysis_outpu
 from templates.html_generator import (
     generate_html_header,
     generate_html_footer,
-    copy_assets_to_report,
     generate_threat_dashboard,
     generate_dashboard_tab,
     generate_activity_items,
@@ -59,22 +58,14 @@ def run_forensic_collection():
             print("   For full forensic data, run this script as Administrator.\n")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    report_path = f"Forensic_Report_{timestamp}"
-    os.makedirs(report_path, exist_ok=True)
-
-    html_file = os.path.join(report_path, "forensic_report.html")
+    html_file = f"forensic_report_{timestamp}.html"
 
     print(f"📊 Generating HTML forensic report...")
-    print(f"📁 Saving to: {report_path}")
+    print(f"📁 Saving to: {html_file}")
     print(f"🤖 Auto-detecting command types...\n")
 
-    # Copy assets (CSS and JavaScript) to report folder
-    if copy_assets_to_report(report_path):
-        print("✅ Assets (CSS/JS) copied to report folder")
-        assets_path = "./assets"  # Relative path within report folder
-    else:
-        print("⚠️  Assets folder not found, using embedded styles")
-        assets_path = "../assets"  # Fallback to parent assets
+    # Assets are embedded inline - no external files needed
+    assets_path = ""  # Not used anymore, kept for compatibility
 
     # Initialize analyzers and data collectors
     regex_analyzer = RegexAnalyzer()
