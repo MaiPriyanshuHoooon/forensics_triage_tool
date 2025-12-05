@@ -122,6 +122,30 @@ def generate_browser_history_tab(browser_history, browser_stats):
 
                 <!-- Filter Controls -->
                 <div class="card" style="margin-bottom: 16px; padding: 16px; background: rgba(59, 130, 246, 0.05);">
+                    <!-- Search Bar -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 14px; font-weight: 600;">
+                            🔍 Search Websites
+                        </label>
+                        <div style="position: relative;">
+                            <input type="text"
+                                   id="search-{browser_id}"
+                                   placeholder="Search by URL, title, or domain (e.g., youtube.com, github, google)..."
+                                   oninput="filterBrowserHistory('{browser_id}')"
+                                   style="width: 100%; padding: 12px 40px 12px 16px; border: 2px solid rgba(59, 130, 246, 0.3); border-radius: 8px; background: #0f172a; color: #e2e8f0; font-size: 14px; transition: all 0.2s;"
+                                   onfocus="this.style.borderColor='rgba(59, 130, 246, 0.6)'; this.style.background='#1a1d29';"
+                                   onblur="this.style.borderColor='rgba(59, 130, 246, 0.3)'; this.style.background='#0f172a';">
+                            <button onclick="document.getElementById('search-{browser_id}').value=''; filterBrowserHistory('{browser_id}');"
+                                    style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); padding: 6px 10px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                Clear
+                            </button>
+                        </div>
+                        <p style="margin-top: 6px; color: #6c757d; font-size: 12px; font-style: italic;">
+                            💡 Tip: Search is case-insensitive and searches across URLs, titles, and domains
+                        </p>
+                    </div>
+
+                    <!-- Date Filters -->
                     <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                         <div>
                             <label style="display: block; margin-bottom: 4px; color: #6c757d; font-size: 12px;">Filter by Month:</label>
@@ -155,7 +179,7 @@ def generate_browser_history_tab(browser_history, browser_stats):
                         <div style="margin-left: auto;">
                             <button onclick="resetFilters('{browser_id}')"
                                     style="padding: 8px 16px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; cursor: pointer;">
-                                Reset Filters
+                                Reset All Filters
                             </button>
                         </div>
                     </div>
@@ -244,15 +268,17 @@ def generate_browser_history_tab(browser_history, browser_stats):
     </div>
 
     <script>
-    // Browser history filtering functionality
+    // Browser history filtering functionality with search
     function filterBrowserHistory(browserId) {
         const monthSelect = document.getElementById('month-filter-' + browserId);
         const yearSelect = document.getElementById('year-filter-' + browserId);
+        const searchInput = document.getElementById('search-' + browserId);
         const table = document.getElementById('table-' + browserId);
         const statsDiv = document.getElementById('filter-stats-' + browserId);
 
         const selectedMonth = monthSelect.value;
         const selectedYear = yearSelect.value;
+        const searchTerm = searchInput.value.toLowerCase().trim();
 
         const rows = table.querySelectorAll('tbody tr');
         let visibleCount = 0;
@@ -261,6 +287,11 @@ def generate_browser_history_tab(browser_history, browser_stats):
         rows.forEach(row => {
             const rowMonth = row.getAttribute('data-month');
             const rowYear = row.getAttribute('data-year');
+
+            // Get row content for search
+            const cells = row.querySelectorAll('td');
+            const url = cells[0]?.textContent.toLowerCase() || '';
+            const title = cells[1]?.textContent.toLowerCase() || '';
 
             let showRow = true;
 
@@ -274,6 +305,14 @@ def generate_browser_history_tab(browser_history, browser_stats):
                 showRow = false;
             }
 
+            // Filter by search term (searches URL and title)
+            if (searchTerm && showRow) {
+                const matchesSearch = url.includes(searchTerm) || title.includes(searchTerm);
+                if (!matchesSearch) {
+                    showRow = false;
+                }
+            }
+
             if (showRow) {
                 row.style.display = '';
                 visibleCount++;
@@ -285,17 +324,26 @@ def generate_browser_history_tab(browser_history, browser_stats):
         // Update stats
         const monthName = selectedMonth === 'all' ? 'All Months' : getMonthName(selectedMonth);
         const yearName = selectedYear === 'all' ? 'All Years' : selectedYear;
+        const searchInfo = searchTerm ? `, searching for "${searchTerm}"` : '';
 
-        if (selectedMonth === 'all' && selectedYear === 'all') {
+        if (selectedMonth === 'all' && selectedYear === 'all' && !searchTerm) {
             statsDiv.innerHTML = `Showing all ${totalCount} entries`;
         } else {
-            statsDiv.innerHTML = `Showing ${visibleCount} of ${totalCount} entries (${monthName}, ${yearName})`;
+            statsDiv.innerHTML = `<span style="color: #3b82f6; font-weight: 600;">Showing ${visibleCount} of ${totalCount} entries</span> (${monthName}, ${yearName}${searchInfo})`;
+        }
+
+        // Highlight search results count
+        if (visibleCount === 0 && (searchTerm || selectedMonth !== 'all' || selectedYear !== 'all')) {
+            statsDiv.innerHTML += ' <span style="color: #ef4444;">- No results found</span>';
+        } else if (searchTerm && visibleCount > 0) {
+            statsDiv.innerHTML += ` <span style="color: #10b981;">✓ Found ${visibleCount} match${visibleCount !== 1 ? 'es' : ''}</span>`;
         }
     }
 
     function resetFilters(browserId) {
         document.getElementById('month-filter-' + browserId).value = 'all';
         document.getElementById('year-filter-' + browserId).value = 'all';
+        document.getElementById('search-' + browserId).value = '';
         filterBrowserHistory(browserId);
     }
 

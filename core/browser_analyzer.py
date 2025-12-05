@@ -108,22 +108,19 @@ class BrowserHistoryAnalyzer:
             # Convert to Chrome timestamp (microseconds since 1601-01-01)
             cutoff_chrome_time = int((cutoff_date - self.CHROME_EPOCH).total_seconds() * 1000000)
 
-            # Query history with visit information and date filter
+            # Query ONLY urls table to avoid duplicate entries from multiple visits
+            # The urls table already has aggregated visit_count, so we don't need the visits join
             query = """
             SELECT
-                urls.url,
-                urls.title,
-                urls.visit_count,
-                urls.typed_count,
-                urls.last_visit_time,
-                urls.hidden,
-                visits.visit_time,
-                visits.from_visit,
-                visits.transition
+                url,
+                title,
+                visit_count,
+                typed_count,
+                last_visit_time,
+                hidden
             FROM urls
-            LEFT JOIN visits ON urls.id = visits.url
-            WHERE urls.last_visit_time >= ?
-            ORDER BY urls.last_visit_time DESC
+            WHERE last_visit_time >= ?
+            ORDER BY last_visit_time DESC
             """
 
             if limit:
@@ -133,7 +130,12 @@ class BrowserHistoryAnalyzer:
                 cursor.execute(query, (cutoff_chrome_time,))
 
             for row in cursor.fetchall():
-                url, title, visit_count, typed_count, last_visit, hidden, visit_time, from_visit, transition = row
+                url, title, visit_count, typed_count, last_visit, hidden = row
+
+                # Since we're not joining visits table, we don't have individual visit data
+                # Use last_visit_time for both timestamps and set a generic visit type
+                visit_time = last_visit
+                transition = typed_count  # Use typed_count as indicator for visit type
 
                 # Convert Chrome timestamp (microseconds since 1601-01-01)
                 if last_visit:
@@ -212,21 +214,19 @@ class BrowserHistoryAnalyzer:
             cutoff_date = datetime.now() - timedelta(days=days_back)
             cutoff_firefox_time = int((cutoff_date - self.FIREFOX_EPOCH).total_seconds() * 1000000)
 
-            # Firefox uses places.sqlite with different schema
+            # Query ONLY moz_places table to avoid duplicate entries from multiple visits
+            # The moz_places table already has aggregated visit_count
             query = """
             SELECT
-                moz_places.url,
-                moz_places.title,
-                moz_places.visit_count,
-                moz_places.typed,
-                moz_places.last_visit_date,
-                moz_places.hidden,
-                moz_historyvisits.visit_date,
-                moz_historyvisits.visit_type
+                url,
+                title,
+                visit_count,
+                typed,
+                last_visit_date,
+                hidden
             FROM moz_places
-            LEFT JOIN moz_historyvisits ON moz_places.id = moz_historyvisits.place_id
-            WHERE moz_places.last_visit_date >= ?
-            ORDER BY moz_places.last_visit_date DESC
+            WHERE last_visit_date >= ?
+            ORDER BY last_visit_date DESC
             """
 
             if limit:
@@ -236,7 +236,11 @@ class BrowserHistoryAnalyzer:
                 cursor.execute(query, (cutoff_firefox_time,))
 
             for row in cursor.fetchall():
-                url, title, visit_count, typed, last_visit, hidden, visit_date, visit_type = row
+                url, title, visit_count, typed, last_visit, hidden = row
+
+                # Since we're not joining historyvisits, use last_visit for both timestamps
+                visit_date = last_visit
+                visit_type = 1 if typed else 0  # Generic visit type based on typed status
 
                 # Convert Firefox timestamp (microseconds since Unix epoch)
                 if last_visit:
