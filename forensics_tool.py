@@ -37,12 +37,14 @@ from templates.html_generator import (
     generate_encrypted_files_tab
 )
 from templates.browser_history_tab import generate_browser_history_tab
+from templates.registry_tab import generate_registry_tab
 from core.regex_analyzer import RegexAnalyzer
 from core.hash_analyzer import HashAnalyzer
 from core.file_scanner import FileScanner
 from core.ioc_scanner import IOCScanner
 from core.encrypted_file_scanner import EncryptedFileScanner
 from core.browser_analyzer import BrowserHistoryAnalyzer
+from core.registry_analyzer import RegistryAnalyzer
 
 
 def run_forensic_collection():
@@ -313,6 +315,41 @@ def run_forensic_collection():
         'matches': browser_stats.get('total_entries', 0)
     })
 
+    # Perform Registry Analysis
+    print(f"\n{'='*70}")
+    print(f"📋 REGISTRY ANALYSIS")
+    print(f"{'='*70}")
+    registry_analyzer = RegistryAnalyzer()
+    registry_data = {}
+    registry_stats = {}
+
+    try:
+        # Analyze live Windows registry
+        artifacts = registry_analyzer.analyze_live_registry()
+        registry_stats = registry_analyzer.get_statistics()
+        registry_data = registry_analyzer.generate_report_data()
+
+        print(f"{'='*70}")
+        print(f"✅ REGISTRY ANALYSIS SUMMARY:")
+        print(f"   Total artifacts: {registry_stats['total_artifacts']}")
+        print(f"   UserAssist entries: {registry_stats['userassist_count']}")
+        print(f"   Run keys: {registry_stats['run_keys_count']}")
+        print(f"   USB devices: {registry_stats['usb_devices_count']}")
+        print(f"   Installed programs: {registry_stats['installed_programs_count']}")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        print(f"    ❌ Registry analysis error: {str(e)}")
+        # Provide empty data structure if analysis fails
+        registry_data = registry_analyzer.generate_report_data()
+        registry_stats = registry_analyzer.get_statistics()
+
+    # Add to activity log
+    activity_log.append({
+        'type': 'registry analysis',
+        'matches': registry_stats.get('total_artifacts', 0)
+    })
+
     # Now generate the modern HTML report
     with open(html_file, "w", encoding="utf-8") as f:
         # Write HTML header with modern UI
@@ -339,6 +376,9 @@ def run_forensic_collection():
 
         # Generate Browser History Tab (NEW)
         f.write(generate_browser_history_tab(browser_history, browser_stats))
+
+        # Generate Registry Analysis Tab (NEW)
+        f.write(generate_registry_tab(registry_data, registry_stats))
 
         # Generate Encrypted Files Tab (NEW)
         f.write(generate_encrypted_files_tab(encrypted_data))

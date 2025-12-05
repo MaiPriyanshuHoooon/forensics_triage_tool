@@ -125,6 +125,15 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
                     </svg>
                     Browser History
                 </button>
+                <button class="tab-btn" data-tab="registry" onclick="switchTab('registry')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                        <line x1="8" y1="13" x2="16" y2="13"></line>
+                        <line x1="8" y1="17" x2="16" y2="17"></line>
+                    </svg>
+                    Registry Analysis
+                </button>
                 <button class="tab-btn" data-tab="encrypted" onclick="switchTab('encrypted')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -418,6 +427,17 @@ def generate_dashboard_tab(stats, recent_activity, system_status):
                             </svg>
                             <span>Browser History</span>
                             <p>Web activity analysis</p>
+                        </button>
+
+                        <button class="quick-action-btn" onclick="switchTab('registry')">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                <polyline points="13 2 13 9 20 9"></polyline>
+                                <line x1="8" y1="13" x2="16" y2="13"></line>
+                                <line x1="8" y1="17" x2="16" y2="17"></line>
+                            </svg>
+                            <span>Registry Analysis</span>
+                            <p>Windows registry artifacts</p>
                         </button>
 
                         <button class="quick-action-btn" onclick="switchTab('encrypted')">
