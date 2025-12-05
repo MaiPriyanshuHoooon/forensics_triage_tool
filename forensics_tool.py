@@ -38,6 +38,7 @@ from templates.html_generator import (
 )
 from templates.browser_history_tab import generate_browser_history_tab
 from templates.registry_tab import generate_registry_tab
+from templates.eventlog_tab import generate_eventlog_tab
 from core.regex_analyzer import RegexAnalyzer
 from core.hash_analyzer import HashAnalyzer
 from core.file_scanner import FileScanner
@@ -45,6 +46,7 @@ from core.ioc_scanner import IOCScanner
 from core.encrypted_file_scanner import EncryptedFileScanner
 from core.browser_analyzer import BrowserHistoryAnalyzer
 from core.registry_analyzer import RegistryAnalyzer
+from core.eventlog_analyzer import EventLogAnalyzer
 
 
 def run_forensic_collection():
@@ -350,6 +352,42 @@ def run_forensic_collection():
         'matches': registry_stats.get('total_artifacts', 0)
     })
 
+    # Perform Event Log Analysis
+    print(f"\n{'='*70}")
+    print(f"📊 EVENT LOG ANALYSIS")
+    print(f"{'='*70}")
+    eventlog_analyzer = EventLogAnalyzer()
+    eventlog_data = {}
+    eventlog_stats = {}
+
+    try:
+        # Analyze Windows event logs (last 7 days)
+        events = eventlog_analyzer.analyze_event_logs(days_back=7, max_events_per_log=5000)
+        eventlog_stats = eventlog_analyzer.get_statistics()
+        eventlog_data = eventlog_analyzer.generate_report_data()
+
+        print(f"{'='*70}")
+        print(f"✅ EVENT LOG ANALYSIS SUMMARY:")
+        print(f"   Total events: {eventlog_stats['total_events']}")
+        print(f"   Security events: {eventlog_stats['security_events']}")
+        print(f"   System events: {eventlog_stats['system_events']}")
+        print(f"   Successful logons: {eventlog_stats['successful_logons']}")
+        print(f"   Failed logons: {eventlog_stats['failed_logons']}")
+        print(f"   Anomalies detected: {eventlog_stats['anomalies_detected']}")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        print(f"    ❌ Event log analysis error: {str(e)}")
+        # Provide empty data structure if analysis fails
+        eventlog_data = eventlog_analyzer.generate_report_data()
+        eventlog_stats = eventlog_analyzer.get_statistics()
+
+    # Add to activity log
+    activity_log.append({
+        'type': 'event log analysis',
+        'matches': eventlog_stats.get('total_events', 0)
+    })
+
     # Now generate the modern HTML report
     with open(html_file, "w", encoding="utf-8") as f:
         # Write HTML header with modern UI
@@ -379,6 +417,9 @@ def run_forensic_collection():
 
         # Generate Registry Analysis Tab (NEW)
         f.write(generate_registry_tab(registry_data, registry_stats))
+
+        # Generate Event Log Analysis Tab (NEW)
+        f.write(generate_eventlog_tab(eventlog_data, eventlog_stats))
 
         # Generate Encrypted Files Tab (NEW)
         f.write(generate_encrypted_files_tab(encrypted_data))

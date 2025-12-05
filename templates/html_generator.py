@@ -134,6 +134,13 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
                     </svg>
                     Registry Analysis
                 </button>
+                <button class="tab-btn" data-tab="eventlog" onclick="switchTab('eventlog')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path>
+                        <path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"></path>
+                    </svg>
+                    Event Logs
+                </button>
                 <button class="tab-btn" data-tab="encrypted" onclick="switchTab('encrypted')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -438,6 +445,15 @@ def generate_dashboard_tab(stats, recent_activity, system_status):
                             </svg>
                             <span>Registry Analysis</span>
                             <p>Windows registry artifacts</p>
+                        </button>
+
+                        <button class="quick-action-btn" onclick="switchTab('eventlog')">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path>
+                                <path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"></path>
+                            </svg>
+                            <span>Event Logs</span>
+                            <p>Security & system events</p>
                         </button>
 
                         <button class="quick-action-btn" onclick="switchTab('encrypted')">
