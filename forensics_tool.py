@@ -39,6 +39,7 @@ from templates.html_generator import (
 from templates.browser_history_tab import generate_browser_history_tab
 from templates.registry_tab import generate_registry_tab
 from templates.eventlog_tab import generate_eventlog_tab
+from templates.mft_tab import generate_mft_tab
 from core.regex_analyzer import RegexAnalyzer
 from core.hash_analyzer import HashAnalyzer
 from core.file_scanner import FileScanner
@@ -47,6 +48,7 @@ from core.encrypted_file_scanner import EncryptedFileScanner
 from core.browser_analyzer import BrowserHistoryAnalyzer
 from core.registry_analyzer import RegistryAnalyzer
 from core.eventlog_analyzer import EventLogAnalyzer
+from core.mft_analyzer import MFTAnalyzer
 
 
 def run_forensic_collection():
@@ -388,6 +390,44 @@ def run_forensic_collection():
         'matches': eventlog_stats.get('total_events', 0)
     })
 
+    # Perform MFT (Master File Table) Analysis
+    print(f"\n{'='*70}")
+    print(f"💾 MFT ANALYSIS - DELETED FILES & RECOVERY")
+    print(f"{'='*70}")
+    mft_analyzer = MFTAnalyzer(volume_path="C:")
+    mft_data = {}
+    mft_stats = {}
+
+    try:
+        # Analyze MFT for deleted files and recovery potential
+        mft_data = mft_analyzer.analyze()
+        mft_stats = mft_analyzer.get_statistics()
+
+        print(f"{'='*70}")
+        print(f"✅ MFT ANALYSIS SUMMARY:")
+        print(f"   Total MFT entries: {mft_stats['total_entries']:,}")
+        print(f"   Active entries: {mft_stats['active_entries']:,}")
+        print(f"   Deleted files: {mft_stats['deleted_entries']:,}")
+        print(f"   Fully recoverable: {mft_stats['recoverable_files']:,}")
+        print(f"   Partially recoverable: {mft_stats['partially_recoverable']:,}")
+        print(f"   Non-recoverable: {mft_stats['non_recoverable']:,}")
+        print(f"   ADS streams detected: {mft_stats['ads_detected']:,}")
+        print(f"   Timestomped files: {mft_stats['timestomped_files']:,}")
+        print(f"   Anomalies detected: {mft_stats['anomalies_detected']:,}")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        print(f"    ❌ MFT analysis error: {str(e)}")
+        # Provide empty data structure if analysis fails
+        mft_data = mft_analyzer._get_unavailable_data()
+        mft_stats = mft_analyzer.get_statistics()
+
+    # Add to activity log
+    activity_log.append({
+        'type': 'mft analysis',
+        'matches': mft_stats.get('deleted_entries', 0)
+    })
+
     # Now generate the modern HTML report
     with open(html_file, "w", encoding="utf-8") as f:
         # Write HTML header with modern UI
@@ -420,6 +460,9 @@ def run_forensic_collection():
 
         # Generate Event Log Analysis Tab (NEW)
         f.write(generate_eventlog_tab(eventlog_data, eventlog_stats))
+
+        # Generate MFT Analysis Tab (NEW)
+        f.write(generate_mft_tab(mft_data, mft_stats))
 
         # Generate Encrypted Files Tab (NEW)
         f.write(generate_encrypted_files_tab(encrypted_data))

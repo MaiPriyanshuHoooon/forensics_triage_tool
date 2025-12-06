@@ -141,6 +141,15 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
                     </svg>
                     Event Logs
                 </button>
+                <button class="tab-btn" data-tab="mft" onclick="switchTab('mft')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 6v6l4 2"></path>
+                        <path d="M16.24 7.76l-1.41 1.41"></path>
+                        <path d="M7.76 16.24l1.41-1.41"></path>
+                    </svg>
+                    MFT Analysis
+                </button>
                 <button class="tab-btn" data-tab="encrypted" onclick="switchTab('encrypted')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>

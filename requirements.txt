@@ -22,6 +22,12 @@ pywin32>=305; sys_platform == 'win32'
 # Optional: Offline registry hive parsing
 python-registry>=1.3.1; sys_platform == 'win32'
 
+# NTFS Master File Table (MFT) parsing and raw volume access
+# The Sleuth Kit Python bindings for forensic file system analysis
+# Note: Windows-only. Installation may fail on macOS/Linux (this is expected).
+# For demo/testing on non-Windows: Run demo_mft_analysis.py instead
+pytsk3>=20231007; sys_platform == 'win32'
+
 # ========================================
 # Document Processing (Optional)
 # ========================================
