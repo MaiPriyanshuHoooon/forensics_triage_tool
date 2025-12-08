@@ -55,6 +55,9 @@ class MFTRecord:
         self.is_directory = False
         self.is_deleted = False
 
+        # Volume information (for multi-volume scanning)
+        self.volume_letter = "?"  # Drive letter (e.g., "C:", "D:")
+
         # Timestamps from $STANDARD_INFORMATION
         self.created = None
         self.modified = None

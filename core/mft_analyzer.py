@@ -41,23 +41,30 @@ class MFTAnalyzer:
     """
     Master File Table forensic analyzer
     Extracts deleted files, metadata, and anomalies from NTFS volumes
+
+    Supports multi-volume scanning to detect deleted files across all drives.
     """
 
-    def __init__(self, volume_path: str = "C:"):
+    def __init__(self, volume_path: str = "C:", scan_all_volumes: bool = True):
         """
         Initialize MFT analyzer
 
         Args:
-            volume_path: Drive letter (e.g., "C:") or volume path
+            volume_path: Primary drive letter (e.g., "C:") - used if scan_all_volumes=False
+            scan_all_volumes: If True, automatically scans ALL NTFS volumes on system
         """
         self.is_windows = sys.platform == 'win32'
         self.volume_path = volume_path
+        self.scan_all_volumes = scan_all_volumes
         self.volume_device = f"\\\\.\\{volume_path}"  # Raw device path
 
         # MFT data storage
         self.mft_records = {}  # entry_number -> MFTRecord
         self.deleted_files = []
         self.active_files = []
+
+        # Track which volume each file came from
+        self.file_to_volume = {}  # entry_number -> volume_letter
 
         # Directory tree reconstruction
         self.directory_tree = {}  # entry_number -> path
@@ -90,6 +97,55 @@ class MFTAnalyzer:
         self.max_entries_to_parse = 2000000  # Scan up to 2M entries (most systems have < 500K)
         self.deleted_file_limit = 50000  # Track up to 50K deleted files
 
+    def _get_ntfs_volumes(self) -> List[str]:
+        """
+        Detect all NTFS volumes on the system
+
+        Returns:
+            List of drive letters (e.g., ['C:', 'D:', 'E:'])
+        """
+        volumes = []
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            # Get all logical drives (A: to Z:)
+            bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+
+            for letter in range(65, 91):  # A-Z
+                if bitmask & (1 << (letter - 65)):
+                    drive = chr(letter) + ':'
+
+                    # Check if it's an NTFS volume
+                    try:
+                        drive_root = drive + '\\\\'
+                        volume_name = ctypes.create_unicode_buffer(261)
+                        fs_name = ctypes.create_unicode_buffer(261)
+
+                        result = ctypes.windll.kernel32.GetVolumeInformationW(
+                            drive_root,
+                            volume_name,
+                            261,
+                            None,
+                            None,
+                            None,
+                            fs_name,
+                            261
+                        )
+
+                        if result and fs_name.value == 'NTFS':
+                            volumes.append(drive)
+                            print(f"       ✅ Found NTFS volume: {drive}")
+                    except:
+                        continue
+
+            return volumes
+
+        except Exception as e:
+            print(f"    ⚠️  Could not detect volumes: {e}")
+            return [self.volume_path]  # Fallback to default
+
     def analyze(self) -> Dict:
         """
         Main analysis function
@@ -117,31 +173,55 @@ class MFTAnalyzer:
             return self._get_unavailable_data()
 
         try:
-            # Step 1: Open volume and get file system
-            print(f"    📁 Opening volume {self.volume_path}...")
-            fs_info = self._open_volume(pytsk3)
+            # Step 0: Detect all NTFS volumes if scan_all_volumes is enabled
+            volumes_to_scan = []
 
-            if not fs_info:
-                print("    ❌ Failed to open volume")
-                return self._get_unavailable_data()
+            if self.scan_all_volumes:
+                print("    🔍 Detecting all NTFS volumes on system...")
+                volumes_to_scan = self._get_ntfs_volumes()
 
-            # Step 2: Read and parse $MFT
-            print("    📊 Reading Master File Table...")
-            self._read_mft(fs_info, pytsk3)
+                if not volumes_to_scan:
+                    print("    ⚠️  No NTFS volumes found, scanning default volume only")
+                    volumes_to_scan = [self.volume_path]
+                else:
+                    print(f"    ✅ Will scan {len(volumes_to_scan)} NTFS volume(s): {', '.join(volumes_to_scan)}")
+            else:
+                print(f"    📁 Single volume mode: scanning {self.volume_path} only")
+                volumes_to_scan = [self.volume_path]
 
-            # Step 3: Reconstruct directory tree
-            print("    🌳 Reconstructing directory tree...")
+            # Step 1: Scan each volume
+            for volume_idx, volume in enumerate(volumes_to_scan, 1):
+                print(f"\n    {'='*60}")
+                print(f"    📀 SCANNING VOLUME {volume_idx}/{len(volumes_to_scan)}: {volume}")
+                print(f"    {'='*60}")
+
+                # Update volume device path
+                self.volume_device = f"\\\\.\\{volume}"
+
+                # Open volume and get file system
+                fs_info = self._open_volume(pytsk3)
+
+                if not fs_info:
+                    print(f"    ⚠️  Failed to open volume {volume}, skipping...")
+                    continue
+
+                # Read and parse $MFT for this volume
+                print(f"    📊 Reading Master File Table from {volume}...")
+                self._read_mft_for_volume(fs_info, pytsk3, volume)
+
+            # Step 2: Reconstruct directory tree (after all volumes scanned)
+            print(f"\n    🌳 Reconstructing directory tree across all volumes...")
             self._reconstruct_paths()
 
-            # Step 4: Classify and analyze files
+            # Step 3: Classify and analyze files
             print("    🔍 Analyzing file entries...")
             self._classify_files()
 
-            # Step 5: Detect anomalies
+            # Step 4: Detect anomalies
             print("    ⚠️  Detecting anomalies...")
             self._detect_anomalies()
 
-            # Step 6: Assess recoverability
+            # Step 5: Assess recoverability
             print("    💾 Assessing file recoverability...")
             self._assess_recoverability()
 
@@ -170,12 +250,58 @@ class MFTAnalyzer:
 
         Returns:
             File system object or None
+
+        CRITICAL: Opens a fresh handle to the volume.
+        This ensures we see the latest MFT state (including recently deleted files).
+        pytsk3 maintains a snapshot of the volume when opened, so we must reopen
+        for each scan to detect new deletions.
         """
         try:
+            # ⚠️ CRITICAL FIX: Force Windows to flush filesystem buffers
+            # This ensures MFT changes are written to disk before we read
+            try:
+                import ctypes
+                from ctypes import wintypes
+
+                # Open volume handle with FILE_FLAG_NO_BUFFERING to bypass cache
+                kernel32 = ctypes.windll.kernel32
+                GENERIC_READ = 0x80000000
+                FILE_SHARE_READ = 0x00000001
+                FILE_SHARE_WRITE = 0x00000002
+                OPEN_EXISTING = 3
+                FILE_FLAG_NO_BUFFERING = 0x20000000
+
+                # Open raw device handle
+                handle = kernel32.CreateFileW(
+                    self.volume_device,
+                    GENERIC_READ,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    None,
+                    OPEN_EXISTING,
+                    FILE_FLAG_NO_BUFFERING,
+                    None
+                )
+
+                if handle != -1:
+                    # Flush file buffers to force disk write
+                    kernel32.FlushFileBuffers(handle)
+                    kernel32.CloseHandle(handle)
+                    print(f"       🔄 Forced Windows filesystem buffer flush")
+
+            except Exception as flush_error:
+                # Non-critical - continue even if flush fails
+                print(f"       ⚠️  Could not flush buffers: {flush_error}")
+
+            # ⚠️ CRITICAL FIX: Force fresh volume access
+            # pytsk3 caches the volume state when opened, so we must create a NEW handle
+            # every time to see recently deleted files
+
             # Open volume image (raw device)
+            # Using volume_device (e.g., \\.\C:) opens a NEW handle each time
             img_info = pytsk3.Img_Info(self.volume_device)
 
             # Open file system (NTFS)
+            # This creates a fresh filesystem view with current MFT state
             fs_info = pytsk3.FS_Info(img_info, offset=0)
 
             # Verify it's NTFS
@@ -189,12 +315,13 @@ class MFTAnalyzer:
             print(f"    ❌ Volume access error: {str(e)}")
             return None
 
-    def _read_mft(self, fs_info, pytsk3):
+    def _read_mft_for_volume(self, fs_info, pytsk3, volume_letter: str):
         """
-        Read and parse MFT records
+        Read and parse MFT records from a specific volume
 
         Args:
             fs_info: pytsk3 file system object
+            volume_letter: Drive letter (e.g., "C:", "D:")
 
         CRITICAL FIX: Forces fresh MFT reads to detect recently deleted files.
         Windows may cache MFT updates, causing newly deleted files to not appear.
@@ -237,18 +364,33 @@ class MFTAnalyzer:
                     mft_record = self._parse_mft_record(record_data, entry_num)
 
                     if mft_record:
-                        self.mft_records[entry_num] = mft_record
+                        # ⚠️ CRITICAL: Add volume information to the record
+                        # This allows tracking which drive the file came from
+                        mft_record.volume_letter = volume_letter
+
+                        # Use unique key: volume + entry_num (e.g., "C:_12345")
+                        unique_key = f"{volume_letter}_{entry_num}"
+                        self.mft_records[unique_key] = mft_record
+                        self.file_to_volume[unique_key] = volume_letter
                         self.stats['total_entries'] += 1
 
                     # Progress indicator
                     if entry_num > 0 and entry_num % 10000 == 0:
-                        print(f"       Parsed {entry_num:,} records...")
+                        print(f"       Parsed {entry_num:,} records from {volume_letter}...")
 
                 except Exception as e:
                     # Skip corrupted records
                     continue
 
-            print(f"       ✅ Parsed {self.stats['total_entries']:,} valid MFT records")
+            print(f"       ✅ Parsed {self.stats['total_entries']:,} valid MFT records from {volume_letter}")
+
+            # ⚠️ DIAGNOSTIC: Show scan range for debugging
+            print(f"       📊 Scan Statistics:")
+            print(f"          - MFT entries scanned: 0 to {records_to_parse-1:,}")
+            print(f"          - Total MFT size: {total_records:,} entries")
+            if records_to_parse < total_records:
+                print(f"          ⚠️  NOTE: Not all entries scanned (limit: {self.max_entries_to_parse:,})")
+                print(f"          If file not found, it may be in entries {records_to_parse:,} - {total_records:,}")
 
         except Exception as e:
             print(f"    ❌ MFT read error: {str(e)}")
@@ -354,35 +496,42 @@ class MFTAnalyzer:
     def _reconstruct_paths(self):
         """
         Reconstruct full file paths from parent references
+        Works across multiple volumes, adding volume letter prefix
         """
 
-        # Build path for root directory
-        if 5 in self.mft_records:  # Entry 5 is root directory
-            self.directory_tree[5] = "/"
+        # Build path for root directory (entry 5) on each volume
+        for key, record in self.mft_records.items():
+            # Extract entry number from key (format: "C:_5")
+            if "_5" in key:  # Entry 5 is root directory
+                volume = record.volume_letter if hasattr(record, 'volume_letter') else "?"
+                self.directory_tree[key] = f"{volume}\\"
+                record.full_path = f"{volume}\\"
 
         # Iteratively build paths (multiple passes for deep hierarchies)
         max_iterations = 50
         for iteration in range(max_iterations):
             progress = False
 
-            for entry_num, record in self.mft_records.items():
+            for key, record in self.mft_records.items():
                 # Skip if already has path
-                if entry_num in self.directory_tree:
+                if key in self.directory_tree:
                     continue
 
-                # Get parent path
+                # Get parent key (same volume + parent entry number)
+                volume = record.volume_letter if hasattr(record, 'volume_letter') else "?"
                 parent_ref = record.parent_reference
+                parent_key = f"{volume}_{parent_ref}"
 
-                if parent_ref in self.directory_tree:
-                    parent_path = self.directory_tree[parent_ref]
+                if parent_key in self.directory_tree:
+                    parent_path = self.directory_tree[parent_key]
 
                     # Build full path
-                    if parent_path == "/":
-                        full_path = "/" + record.filename
+                    if parent_path.endswith("\\"):
+                        full_path = parent_path + record.filename
                     else:
-                        full_path = parent_path + "/" + record.filename
+                        full_path = parent_path + "\\" + record.filename
 
-                    self.directory_tree[entry_num] = full_path
+                    self.directory_tree[key] = full_path
                     record.full_path = full_path
                     progress = True
 
@@ -391,9 +540,10 @@ class MFTAnalyzer:
                 break
 
         # Mark orphaned files (no parent path found)
-        for entry_num, record in self.mft_records.items():
-            if entry_num not in self.directory_tree and record.filename:
-                record.full_path = f"[ORPHANED]/{record.filename}"
+        for key, record in self.mft_records.items():
+            if key not in self.directory_tree and record.filename:
+                volume = record.volume_letter if hasattr(record, 'volume_letter') else "?"
+                record.full_path = f"{volume}\\[ORPHANED]\\{record.filename}"
                 record.anomaly_flags.append("ORPHANED")
 
     def _classify_files(self):

@@ -394,7 +394,9 @@ def run_forensic_collection():
     print(f"\n{'='*70}")
     print(f"💾 MFT ANALYSIS - DELETED FILES & RECOVERY")
     print(f"{'='*70}")
-    mft_analyzer = MFTAnalyzer(volume_path="C:")
+    # ⚠️ CRITICAL: Enable scan_all_volumes=True to detect deleted files across ALL drives
+    # This ensures files deleted from D:, E:, etc. are found (not just C: drive)
+    mft_analyzer = MFTAnalyzer(volume_path="C:", scan_all_volumes=True)
     mft_data = {}
     mft_stats = {}
 
