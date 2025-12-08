@@ -1288,7 +1288,9 @@ async function queryVirusTotalAPI(hash) {
         }
 
         // Try DIRECT VirusTotal API call (v3)
-        const VT_API_KEY = 'fcfb0e148143e7571f46b244d1cc5a0d0ad36b0c3eb9c4046e3aba5f9d2bbeef';
+        // NOTE: API key should be loaded from backend/config, not hardcoded here
+        // This is a placeholder for frontend demonstration only
+        const VT_API_KEY = 'YOUR_VIRUSTOTAL_API_KEY_HERE';
 
         try {
             const response = await fetch(`https://www.virustotal.com/api/v3/files/${hash}`, {

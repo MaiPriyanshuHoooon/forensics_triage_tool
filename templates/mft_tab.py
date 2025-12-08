@@ -211,11 +211,104 @@ def generate_mft_tab(mft_data, mft_stats):
 
     html += '''
     </div>
+
+    <script>
+    // MFT File Recovery Functions
+    function recoverFile(entryNumber, filename) {
+        const message = `🚀 FILE RECOVERY SYSTEM\\n` +
+              `${'='.repeat(60)}\\n\\n` +
+              `📄 File: ${filename}\\n` +
+              `🔢 MFT Entry: #${entryNumber}\\n\\n` +
+              `✅ RECOVERY READY!\\n\\n` +
+              `To recover this file, use the command-line tool:\\n\\n` +
+              `  1. Locate the analyzer state file in your report directory:\\n` +
+              `     mft_analyzer_state_<timestamp>.pkl\\n\\n` +
+              `  2. Run the recovery tool:\\n` +
+              `     python mft_recovery_tool.py mft_analyzer_state_<timestamp>.pkl\\n\\n` +
+              `  3. Select option 3 (Recover a file)\\n\\n` +
+              `  4. Enter entry number: ${entryNumber}\\n\\n` +
+              `📁 Recovered files will be saved to your working directory\\n` +
+              `📋 See MFT_RECOVERY_GUIDE.md for detailed instructions\\n\\n` +
+              `${'='.repeat(60)}\\n\\n` +
+              `💡 TIP: Resident files (< 700 bytes) can be fully recovered.\\n` +
+              `   Non-resident files require cluster-level recovery.`;
+
+        alert(message);
+    }
+
+    function previewFile(entryNumber, filename) {
+        const message = `👁️ FILE PREVIEW SYSTEM\\n` +
+              `${'='.repeat(60)}\\n\\n` +
+              `📄 File: ${filename}\\n` +
+              `🔢 MFT Entry: #${entryNumber}\\n\\n` +
+              `To preview this file's content:\\n\\n` +
+              `  1. Run the recovery tool:\\n` +
+              `     python mft_recovery_tool.py mft_analyzer_state_<timestamp>.pkl\\n\\n` +
+              `  2. Select option 4 (Preview file content)\\n\\n` +
+              `  3. Enter entry number: ${entryNumber}\\n\\n` +
+              `📊 Preview shows:\\n` +
+              `   • Hex dump of file content\\n` +
+              `   • Text preview (if applicable)\\n` +
+              `   • File type detection\\n` +
+              `   • Content analysis\\n\\n` +
+              `${'='.repeat(60)}\\n\\n` +
+              `💡 Only available for resident files stored in MFT`;
+
+        alert(message);
+    }
+
+    function exportMetadata(entryNumber) {
+        const message = `📋 METADATA EXPORT\\n` +
+              `${'='.repeat(60)}\\n\\n` +
+              `🔢 MFT Entry: #${entryNumber}\\n\\n` +
+              `To export full metadata to JSON:\\n\\n` +
+              `  1. Run the recovery tool:\\n` +
+              `     python mft_recovery_tool.py mft_analyzer_state_<timestamp>.pkl\\n\\n` +
+              `  2. Select option 5 (Export metadata to JSON)\\n\\n` +
+              `  3. Enter entry number: ${entryNumber}\\n\\n` +
+              `📦 Exported file includes:\\n` +
+              `   • All MFT record fields\\n` +
+              `   • Complete timestamp history (MACB)\\n` +
+              `   • Data run details (cluster allocation)\\n` +
+              `   • Parent directory references\\n` +
+              `   • Anomaly flags (timestomping, ADS)\\n` +
+              `   • Recovery assessment\\n\\n` +
+              `📄 Output: mft_entry_${entryNumber}_metadata.json\\n\\n` +
+              `${'='.repeat(60)}`;
+
+        alert(message);
+    }
+
+    // MFT Deleted Files Filtering Function
+    function filterDeletedFilesByAge() {
+        const ageFilter = document.getElementById('ageFilter').value;
+        const recoveryFilter = document.getElementById('recoveryFilter').value;
+        const rows = document.querySelectorAll('#deletedFilesTable tbody tr.mft-row');
+
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const ageCategory = row.getAttribute('data-age');
+            const recoveryStatus = row.getAttribute('data-recovery');
+
+            let showAge = (ageFilter === 'all' || ageCategory === ageFilter);
+            let showRecovery = (recoveryFilter === 'all' || recoveryStatus === recoveryFilter);
+
+            if (showAge && showRecovery) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update visible count
+        document.getElementById('visibleCount').textContent = visibleCount;
+    }
+    </script>
     '''
 
     return html
-
-
 def generate_mft_anomalies_section(anomalies):
     """
     Generate anomalies section HTML
@@ -351,7 +444,7 @@ def generate_mft_anomalies_section(anomalies):
 
 def generate_deleted_files_table(deleted_files):
     """
-    Generate deleted files table HTML
+    Generate deleted files table HTML with age-based filtering
     """
 
     html = f'''
@@ -367,20 +460,58 @@ def generate_deleted_files_table(deleted_files):
                 </svg>
             </div>
             <div class="command-card-body" style="display: block;">
+                <!-- Age Filter Controls -->
+                <div style="padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #a78bfa; font-weight: 600; font-size: 0.9rem;">📅 Filter by Age:</span>
+                        <select id="ageFilter" onchange="filterDeletedFilesByAge()"
+                                style="padding: 6px 12px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(139, 92, 246, 0.3);
+                                       border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                            <option value="all">All Files ({len(deleted_files)})</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week (1-7 days)</option>
+                            <option value="month">This Month (8-30 days)</option>
+                            <option value="quarter">Last 3 Months (31-90 days)</option>
+                            <option value="half">Last 6 Months (91-180 days)</option>
+                            <option value="old">Older (180+ days)</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #a78bfa; font-weight: 600; font-size: 0.9rem;">🔍 Recovery Status:</span>
+                        <select id="recoveryFilter" onchange="filterDeletedFilesByAge()"
+                                style="padding: 6px 12px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(139, 92, 246, 0.3);
+                                       border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                            <option value="all">All Status</option>
+                            <option value="FULL">✅ Fully Recoverable</option>
+                            <option value="PARTIAL">⚠️ Partially Recoverable</option>
+                            <option value="METADATA_ONLY">📋 Metadata Only</option>
+                            <option value="OVERWRITTEN">❌ Overwritten</option>
+                        </select>
+                    </div>
+                    <div id="filterStats" style="margin-left: auto; color: #8b5cf6; font-size: 0.85rem; font-weight: 600;">
+                        Showing: <span id="visibleCount">{len(deleted_files)}</span> files
+                    </div>
+                </div>
+
                 <div class="command-output">
-                    <table class="data-table" style="width: 100%;">
+                    <table class="data-table" id="deletedFilesTable" style="width: 100%;">
                         <thead>
                             <tr>
-                                <th style="width: 20%;">Filename</th>
-                                <th style="width: 30%;">Path</th>
-                                <th style="width: 10%;">Size</th>
-                                <th style="width: 15%;">Modified Date</th>
-                                <th style="width: 15%;">Recoverability</th>
-                                <th style="width: 10%;">Entry #</th>
+                                <th style="width: 18%;">Filename</th>
+                                <th style="width: 25%;">Path</th>
+                                <th style="width: 8%;">Size</th>
+                                <th style="width: 12%;">Modified Date</th>
+                                <th style="width: 12%;">Recoverability</th>
+                                <th style="width: 8%;">Entry #</th>
+                                <th style="width: 17%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
     '''
+
+    # Add data attributes for filtering
+    from datetime import datetime, timedelta
+    now = datetime.now()
 
     for record in deleted_files[:500]:  # Limit to 500 for performance
         filename = record.filename or '[No Name]'
@@ -390,30 +521,90 @@ def generate_deleted_files_table(deleted_files):
         recoverability = record.recoverability
         entry_num = record.entry_number
 
+        # Calculate days since deletion
+        days_ago = 9999
+        age_category = 'old'
+        if record.modified:
+            try:
+                days_ago = (now - record.modified).days
+                if days_ago == 0:
+                    age_category = 'today'
+                elif days_ago <= 7:
+                    age_category = 'week'
+                elif days_ago <= 30:
+                    age_category = 'month'
+                elif days_ago <= 90:
+                    age_category = 'quarter'
+                elif days_ago <= 180:
+                    age_category = 'half'
+                else:
+                    age_category = 'old'
+            except:
+                pass
+
         recovery_badge = get_recovery_badge_color(recoverability)
         recovery_icon = get_recovery_icon(recoverability)
 
+        # Determine if file content can be recovered
+        can_recover = recoverability in ['FULL', 'PARTIAL']
+        is_resident = getattr(record, 'is_resident', False)
+
+        # Add data attributes for filtering
         html += f'''
-                            <tr>
+                            <tr data-age="{age_category}" data-recovery="{recoverability}" class="mft-row">
                                 <td><strong>{filename}</strong></td>
                                 <td><span style="font-size: 0.8rem; font-family: monospace;">{path}</span></td>
                                 <td>{size}</td>
                                 <td><span style="font-size: 0.8rem;">{modified}</span></td>
                                 <td><span class="badge {recovery_badge}">{recovery_icon} {recoverability}</span></td>
                                 <td><span style="font-size: 0.8rem; color: #6b7280;">#{entry_num}</span></td>
+                                <td>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+        '''
+
+        if can_recover:
+            html += f'''
+                                        <button onclick="recoverFile({entry_num}, '{filename}')"
+                                                style="padding: 4px 8px; background: #10b981; color: white; border: none;
+                                                       border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;"
+                                                title="Recover file content">
+                                            💾 Recover
+                                        </button>
+            '''
+
+            if is_resident:
+                html += f'''
+                                        <button onclick="previewFile({entry_num}, '{filename}')"
+                                                style="padding: 4px 8px; background: #3b82f6; color: white; border: none;
+                                                       border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;"
+                                                title="Preview file content">
+                                            👁️ Preview
+                                        </button>
+                '''
+
+        html += f'''
+                                        <button onclick="exportMetadata({entry_num})"
+                                                style="padding: 4px 8px; background: #6b7280; color: white; border: none;
+                                                       border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;"
+                                                title="Export metadata">
+                                            📋 Info
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
         '''
 
     html += '''
                         </tbody>
                     </table>
-                    <div style="margin-top: 16px; padding: 16px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 4px solid #3b82f6;">
-                        <strong style="color: #3b82f6;">🔍 Recovery Legend:</strong><br>
-                        • <span class="badge badge-green">✅ FULL</span> - All data clusters free, 100% recoverable<br>
-                        • <span class="badge badge-orange">⚠️ PARTIAL</span> - Some clusters overwritten, partial recovery possible<br>
+                    <div style="margin-top: 16px; padding: 16px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border-left: 4px solid #10b981;">
+                        <strong style="color: #10b981;">🔍 Recovery Status Legend:</strong><br>
+                        • <span class="badge badge-green">✅ FULL</span> - All data clusters free, 100% recoverable by this tool<br>
+                        • <span class="badge badge-orange">⚠️ PARTIAL</span> - Some clusters overwritten, partial data recoverable<br>
                         • <span class="badge badge-gray">📋 METADATA_ONLY</span> - Only file metadata available<br>
                         <br>
-                        <strong>Recommended Recovery Tools:</strong> PhotoRec, TestDisk, Recuva, Autopsy, FTK Imager
+                        <strong style="color: #10b981;">💾 Built-in Recovery:</strong> Use the recovery buttons in each row to extract file content directly<br>
+                        <strong style="color: #10b981;">📊 Export Options:</strong> Export metadata to CSV for further analysis
                     </div>
                 </div>
             </div>

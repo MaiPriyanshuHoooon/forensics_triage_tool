@@ -89,6 +89,9 @@ class MFTRecord:
         # Raw attributes
         self.attributes = {}
 
+        # Raw MFT record data (for file content recovery)
+        self.raw_data = b''
+
 
 class NTFSParser:
     """

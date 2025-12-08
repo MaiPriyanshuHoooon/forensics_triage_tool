@@ -428,6 +428,18 @@ def run_forensic_collection():
         'matches': mft_stats.get('deleted_entries', 0)
     })
 
+    # Save MFT analyzer for file recovery operations
+    # This allows users to recover files later using command-line tools
+    try:
+        import pickle
+        analyzer_path = f'mft_analyzer_state_{timestamp}.pkl'
+        with open(analyzer_path, 'wb') as f:
+            pickle.dump(mft_analyzer, f)
+        print(f"💾 MFT analyzer state saved to: {analyzer_path}")
+        print(f"   Use 'python mft_recovery_tool.py {analyzer_path}' to recover files\n")
+    except Exception as e:
+        print(f"⚠️  Could not save MFT analyzer state: {str(e)}\n")
+
     # Now generate the modern HTML report
     with open(html_file, "w", encoding="utf-8") as f:
         # Write HTML header with modern UI

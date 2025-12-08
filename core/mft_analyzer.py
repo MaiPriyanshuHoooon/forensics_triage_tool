@@ -85,8 +85,10 @@ class MFTAnalyzer:
         }
 
         # Performance limits
-        self.max_entries_to_parse = 100000  # Limit for performance
-        self.deleted_file_limit = 10000  # Max deleted files to track
+        # Set to very high values to capture ALL deleted files
+        # including those permanently removed from Recycle Bin
+        self.max_entries_to_parse = 2000000  # Scan up to 2M entries (most systems have < 500K)
+        self.deleted_file_limit = 50000  # Track up to 50K deleted files
 
     def analyze(self) -> Dict:
         """
@@ -266,6 +268,9 @@ class MFTAnalyzer:
             record.is_in_use = header['is_in_use']
             record.is_directory = header['is_directory']
             record.is_deleted = not header['is_in_use']
+
+            # Store raw record data for file content recovery
+            record.raw_data = data
 
             # Parse attributes
             offset = header['first_attr_offset']
@@ -558,6 +563,139 @@ class MFTAnalyzer:
                 len(self.anomalies['suspicious_paths']) +
                 len(self.anomalies['orphaned_files'])
             )
+        }
+
+    def recover_file(self, entry_number: int) -> Tuple[bool, str, Optional[bytes]]:
+        """
+        Recover actual file content from MFT record
+
+        Args:
+            entry_number: MFT entry number
+
+        Returns:
+            Tuple of (success, message, file_content_bytes)
+        """
+
+        if entry_number not in self.mft_records:
+            return False, "MFT entry not found", None
+
+        record = self.mft_records[entry_number]
+
+        if not record.is_deleted:
+            return False, "File is not deleted (still active)", None
+
+        if record.is_directory:
+            return False, "Cannot recover directory entries", None
+
+        # Only resident files can be directly recovered from MFT
+        if not record.is_resident:
+            return False, f"File is non-resident ({format_filesize(record.logical_size)}). Cluster-level recovery requires advanced tools.", None
+
+        # Extract resident data from raw MFT record
+        try:
+            from core.mft_file_recovery import MFTFileRecovery
+            recovery = MFTFileRecovery(self.volume_path)
+
+            # Get file content from MFT record
+            success, result = recovery.recover_resident_file(record.raw_data, record.filename)
+
+            if success:
+                # Read the recovered file
+                with open(result, 'rb') as f:
+                    content = f.read()
+                return True, f"File recovered: {result}", content
+            else:
+                return False, result, None
+
+        except Exception as e:
+            return False, f"Recovery error: {str(e)}", None
+
+    def preview_file(self, entry_number: int) -> dict:
+        """
+        Get preview of file content (hex + text)
+
+        Args:
+            entry_number: MFT entry number
+
+        Returns:
+            Dictionary with preview data
+        """
+
+        if entry_number not in self.mft_records:
+            return {'success': False, 'error': 'Entry not found'}
+
+        record = self.mft_records[entry_number]
+
+        if not record.is_resident:
+            return {
+                'success': False,
+                'error': f'File is non-resident ({format_filesize(record.logical_size)}). Too large for preview.'
+            }
+
+        try:
+            from core.mft_file_recovery import MFTFileRecovery
+            recovery = MFTFileRecovery(self.volume_path)
+
+            preview = recovery.get_file_preview(record.raw_data)
+
+            if preview.get('success'):
+                preview['filename'] = record.filename
+                preview['size_formatted'] = format_filesize(preview.get('size', 0))
+
+            return preview
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def export_metadata(self, entry_number: int) -> Optional[dict]:
+        """
+        Export complete metadata for an MFT entry
+
+        Args:
+            entry_number: MFT entry number
+
+        Returns:
+            Dictionary with all metadata
+        """
+
+        if entry_number not in self.mft_records:
+            return None
+
+        record = self.mft_records[entry_number]
+
+        return {
+            'entry_number': record.entry_number,
+            'filename': record.filename,
+            'full_path': record.full_path,
+            'file_size': record.logical_size,
+            'file_size_formatted': format_filesize(record.logical_size),
+            'is_deleted': record.is_deleted,
+            'is_directory': record.is_directory,
+            'is_resident': record.is_resident,
+            'recoverability': record.recoverability,
+
+            'timestamps': {
+                'created': format_timestamp(record.created),
+                'modified': format_timestamp(record.modified),
+                'accessed': format_timestamp(record.accessed),
+                'mft_modified': format_timestamp(record.mft_modified)
+            },
+
+            'anomalies': {
+                'is_timestomped': record.is_timestomped,
+                'has_ads': record.has_ads,
+                'ads_streams': record.ads_streams,
+                'flags': record.anomaly_flags
+            },
+
+            'technical': {
+                'sequence_number': record.sequence_number,
+                'parent_reference': record.parent_reference,
+                'parent_sequence': record.parent_sequence,
+                'data_runs': record.data_runs,
+                'physical_size': record.physical_size,
+                'physical_size_formatted': format_filesize(record.physical_size)
+            }
         }
 
 
