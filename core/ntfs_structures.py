@@ -398,26 +398,49 @@ class NTFSParser:
     def filetime_to_datetime(filetime: int) -> Optional[datetime]:
         """
         Convert Windows FILETIME (100-nanosecond intervals since 1601-01-01) to Python datetime
+
+        IMPORTANT: Windows FILETIME is stored in UTC timezone.
+        This function converts to LOCAL system timezone for accurate display.
+
+        Example:
+        - File deleted at 10:00 AM IST (UTC+5:30)
+        - FILETIME stores: 04:30 AM UTC
+        - This function returns: 10:00 AM (local time)
         """
 
         if filetime == 0:
             return None
 
         try:
-            # FILETIME epoch: January 1, 1601
+            # FILETIME epoch: January 1, 1601 (UTC)
             epoch = datetime(1601, 1, 1)
 
             # Convert 100-nanosecond intervals to seconds
             seconds = filetime / 10000000.0
 
-            # Add to epoch
-            result = epoch + timedelta(seconds=seconds)
+            # Add to epoch (result is in UTC)
+            utc_result = epoch + timedelta(seconds=seconds)
 
             # Sanity check (valid NTFS timestamps)
-            if result.year < 1601 or result.year > 2100:
+            if utc_result.year < 1601 or utc_result.year > 2100:
                 return None
 
-            return result
+            # ⚠️ CRITICAL FIX: Convert from UTC to LOCAL timezone
+            # Windows stores FILETIME in UTC, but users expect local time display
+            import time
+
+            # Get local timezone offset in seconds
+            if time.daylight:
+                # DST is in effect
+                offset_seconds = -time.altzone
+            else:
+                # Standard time
+                offset_seconds = -time.timezone
+
+            # Convert UTC to local time
+            local_result = utc_result + timedelta(seconds=offset_seconds)
+
+            return local_result
 
         except Exception as e:
             return None

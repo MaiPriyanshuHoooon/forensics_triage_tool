@@ -460,6 +460,22 @@ def generate_deleted_files_table(deleted_files):
                 </svg>
             </div>
             <div class="command-card-body" style="display: block;">
+                <!-- ⚠️ WARNING: Recently Deleted Files Notice -->
+                <div style="padding: 16px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4);
+                            border-radius: 8px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 32px;">⚠️</div>
+                        <div style="flex: 1;">
+                            <strong style="color: #fbbf24; font-size: 1rem;">Important: Recently Deleted Files</strong>
+                            <p style="margin: 4px 0 0 0; color: #d1d5db; font-size: 0.85rem; line-height: 1.5;">
+                                If you just deleted files (Shift+Delete) and they're not showing here, wait 10-30 seconds and run the scan again.
+                                Windows may still be writing MFT changes to disk. Files marked with 🔴 <strong>RECENTLY_DELETED</strong> were found
+                                within the last 60 seconds and may have incomplete metadata.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Age Filter Controls -->
                 <div style="padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 8px;">
@@ -513,7 +529,15 @@ def generate_deleted_files_table(deleted_files):
     from datetime import datetime, timedelta
     now = datetime.now()
 
-    for record in deleted_files[:500]:  # Limit to 500 for performance
+    # ⚠️ CRITICAL FIX: Sort deleted files by modification date (most recent first)
+    # This ensures newly deleted files appear at the top
+    sorted_deleted_files = sorted(
+        deleted_files[:500],  # Limit to 500 for performance
+        key=lambda x: x.modified if x.modified else datetime.min,
+        reverse=True
+    )
+
+    for record in sorted_deleted_files:
         filename = record.filename or '[No Name]'
         path = record.full_path or '[Unknown]'
         size = format_filesize(record.logical_size)
@@ -549,10 +573,15 @@ def generate_deleted_files_table(deleted_files):
         can_recover = recoverability in ['FULL', 'PARTIAL']
         is_resident = getattr(record, 'is_resident', False)
 
+        # Check if this file was deleted very recently (warning flag)
+        recently_deleted_warning = ""
+        if hasattr(record, 'anomaly_flags') and 'RECENTLY_DELETED' in record.anomaly_flags:
+            recently_deleted_warning = '<span style="color: #fbbf24; font-size: 0.7rem; margin-left: 8px;">🔴 JUST DELETED</span>'
+
         # Add data attributes for filtering
         html += f'''
                             <tr data-age="{age_category}" data-recovery="{recoverability}" class="mft-row">
-                                <td><strong>{filename}</strong></td>
+                                <td><strong>{filename}</strong>{recently_deleted_warning}</td>
                                 <td><span style="font-size: 0.8rem; font-family: monospace;">{path}</span></td>
                                 <td>{size}</td>
                                 <td><span style="font-size: 0.8rem;">{modified}</span></td>

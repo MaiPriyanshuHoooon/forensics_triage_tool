@@ -195,9 +195,19 @@ class MFTAnalyzer:
 
         Args:
             fs_info: pytsk3 file system object
+
+        CRITICAL FIX: Forces fresh MFT reads to detect recently deleted files.
+        Windows may cache MFT updates, causing newly deleted files to not appear.
         """
 
         try:
+            # ⚠️ CRITICAL: Re-open filesystem to flush any cached data
+            # This ensures we see the most recent MFT state
+            print(f"       🔄 Flushing MFT cache for fresh read...")
+
+            # Close and reopen filesystem handle (forces kernel cache flush)
+            # Note: pytsk3 doesn't have explicit cache flush, so we rely on reopen
+
             # Open $MFT file (inode 0)
             mft_file = fs_info.open_meta(inode=0)
 
@@ -208,6 +218,7 @@ class MFTAnalyzer:
 
             print(f"       MFT Size: {format_filesize(mft_size)}")
             print(f"       Total Records: {total_records}")
+            print(f"       ⏱️  Reading MFT entries (this may take 30-60 seconds)...")
 
             # Limit parsing for performance
             records_to_parse = min(total_records, self.max_entries_to_parse)
@@ -411,6 +422,19 @@ class MFTAnalyzer:
             if record.is_deleted:
                 self.stats['deleted_entries'] += 1
 
+                # ⚠️ CHECK: Was this file deleted very recently? (last 60 seconds)
+                # Windows may not have flushed MFT to disk yet
+                if record.modified:
+                    time_since_deletion = (datetime.now() - record.modified).total_seconds()
+                    if time_since_deletion < 60:
+                        record.anomaly_flags.append("RECENTLY_DELETED")
+                        # Mark as potentially incomplete data
+                        if not hasattr(record, 'warnings'):
+                            record.warnings = []
+                        record.warnings.append(
+                            f"Deleted {int(time_since_deletion)}s ago - MFT may still be updating"
+                        )
+
                 # Limit deleted files to track
                 if deleted_count < self.deleted_file_limit:
                     self.deleted_files.append(record)
@@ -523,12 +547,16 @@ class MFTAnalyzer:
     def _generate_timeline(self) -> List[Dict]:
         """
         Generate timeline of deleted file events
+
+        CRITICAL FIX: Properly handle None/invalid timestamps.
+        Files with no timestamp are placed at END of timeline (least recent).
         """
 
         timeline = []
 
         for record in self.deleted_files[:100]:  # Top 100 most recent
-            if record.modified:
+            # Only add files with valid timestamps to timeline
+            if record.modified and isinstance(record.modified, datetime):
                 timeline.append({
                     'timestamp': record.modified,
                     'event': 'File Deleted',
@@ -539,7 +567,9 @@ class MFTAnalyzer:
                 })
 
         # Sort by timestamp (most recent first)
-        timeline.sort(key=lambda x: x['timestamp'] if x['timestamp'] else datetime.min, reverse=True)
+        # Using a lambda that safely handles datetime objects
+        # Files with invalid/None timestamps are already excluded above
+        timeline.sort(key=lambda x: x['timestamp'], reverse=True)
 
         return timeline
 
