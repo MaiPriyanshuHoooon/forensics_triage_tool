@@ -40,6 +40,7 @@ from templates.browser_history_tab import generate_browser_history_tab
 from templates.registry_tab import generate_registry_tab
 from templates.eventlog_tab import generate_eventlog_tab
 from templates.mft_tab import generate_mft_tab
+from templates.pagefile_tab import generate_pagefile_tab
 from core.regex_analyzer import RegexAnalyzer
 from core.hash_analyzer import HashAnalyzer
 from core.file_scanner import FileScanner
@@ -49,6 +50,7 @@ from core.browser_analyzer import BrowserHistoryAnalyzer
 from core.registry_analyzer import RegistryAnalyzer
 from core.eventlog_analyzer import EventLogAnalyzer
 from core.mft_analyzer import MFTAnalyzer
+from core.pagefile_analyzer import PagefileAnalyzer
 
 
 def run_forensic_collection():
@@ -442,6 +444,41 @@ def run_forensic_collection():
     except Exception as e:
         print(f"⚠️  Could not save MFT analyzer state: {str(e)}\n")
 
+    # Perform Pagefile.sys Analysis
+    print(f"\n{'='*70}")
+    print(f"💾 PAGEFILE.SYS ANALYSIS - VIRTUAL MEMORY FORENSICS")
+    print(f"{'='*70}")
+    pagefile_analyzer = PagefileAnalyzer()
+    pagefile_data = {}
+    pagefile_stats = {}
+
+    try:
+        # Analyze pagefile for memory artifacts
+        pagefile_data = pagefile_analyzer.analyze()
+        pagefile_stats = pagefile_analyzer.get_statistics()
+
+        print(f"{'='*70}")
+        print(f"✅ PAGEFILE ANALYSIS SUMMARY:")
+        print(f"   Strings extracted: {pagefile_stats['strings_extracted']:,}")
+        print(f"   URLs found: {pagefile_stats['urls_found']:,}")
+        print(f"   Email addresses: {pagefile_stats['emails_found']:,}")
+        print(f"   File paths: {pagefile_stats['paths_found']:,}")
+        print(f"   IP addresses: {pagefile_stats['ips_found']:,}")
+        print(f"   🔐 Sensitive items: {pagefile_stats['sensitive_items']:,}")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        print(f"    ❌ Pagefile analysis error: {str(e)}")
+        # Provide empty data structure if analysis fails
+        pagefile_data = pagefile_analyzer._get_unavailable_data()
+        pagefile_stats = pagefile_analyzer.get_statistics()
+
+    # Add to activity log
+    activity_log.append({
+        'type': 'pagefile analysis',
+        'matches': pagefile_stats.get('total_artifacts', 0)
+    })
+
     # Now generate the modern HTML report
     with open(html_file, "w", encoding="utf-8") as f:
         # Write HTML header with modern UI
@@ -477,6 +514,9 @@ def run_forensic_collection():
 
         # Generate MFT Analysis Tab (NEW)
         f.write(generate_mft_tab(mft_data, mft_stats))
+
+        # Generate Pagefile Analysis Tab (NEW)
+        f.write(generate_pagefile_tab(pagefile_data))
 
         # Generate Encrypted Files Tab (NEW)
         f.write(generate_encrypted_files_tab(encrypted_data))
