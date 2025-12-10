@@ -11,6 +11,14 @@
 # HTTP library for API calls (VirusTotal integration)
 requests>=2.31.0
 
+# License management & encryption
+cryptography>=41.0.0
+
+# GUI Framework (for professional interface)
+PyQt5>=5.15.9
+PyQt5-Qt5>=5.15.2
+PyQt5-sip>=12.12.2
+
 # ========================================
 # Windows-Only Dependencies
 # ========================================
