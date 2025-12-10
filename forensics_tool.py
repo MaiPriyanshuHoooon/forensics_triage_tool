@@ -100,7 +100,7 @@ class ForensicCollector:
             self.os_results[category] = []
             
             # Process each command in the category
-            for idx, cmd in enumerate(cmds):
+            for cmd in cmds:
                 # Auto-detect and execute
                 output, cmd_type = execute(cmd)
                 
@@ -172,8 +172,13 @@ class ForensicCollector:
         
         Returns:
             dict: IOC scan results with threat assessment
+        
+        Note: This method should be called after execute_all_commands() to scan collected data.
         """
         # Perform IOC Scan Analysis
+        if not self.all_forensic_data:
+            print("⚠️  Warning: No forensic data collected yet. Call execute_all_commands() first.")
+        
         combined_forensic_text = "\n".join(self.all_forensic_data)
         ioc_results = self.ioc_scanner.scan_text(combined_forensic_text)
         
@@ -216,7 +221,8 @@ class ForensicCollector:
             self.browser_stats = browser_stats
             
         except Exception as e:
-            # Return empty structure on error
+            # Log error and return empty structure
+            print(f"⚠️  Browser history analysis error: {str(e)}")
             self.browser_history = {}
             self.browser_stats = {}
         
@@ -248,7 +254,8 @@ class ForensicCollector:
             self.eventlog_stats = eventlog_stats
             
         except Exception as e:
-            # Return empty structure on error
+            # Log error and return empty structure
+            print(f"⚠️  Event log analysis error: {str(e)}")
             self.eventlog_data = self.eventlog_analyzer.generate_report_data()
             self.eventlog_stats = self.eventlog_analyzer.get_statistics()
         
@@ -269,10 +276,12 @@ class ForensicCollector:
         """
         html_file = os.path.join(self.output_dir, f"forensic_report_{self.timestamp}.html")
         
-        # Ensure we have all required data
+        # Ensure we have all required data - set defaults if methods weren't called
         if not hasattr(self, 'file_hashes'):
+            print("⚠️  Warning: execute_all_commands() not called. Using empty hash results.")
             self.file_hashes = []
         if not hasattr(self, 'regex_results'):
+            print("⚠️  Warning: Regex analysis not performed. Using empty results.")
             self.regex_results = {'iocs': [], 'threat_score': 0, 'threat_level': 'LOW', 'suspicious_patterns': {}}
         if not hasattr(self, 'browser_stats'):
             self.browser_stats = {}
@@ -344,10 +353,12 @@ class ForensicCollector:
             f.write(generate_html_header(self.timestamp, assets_path))
             
             # Generate Dashboard Tab
+            # Calculate actual statistics from collected data
+            total_evidence = len(self.os_results) + len(self.file_hashes) + len(browser_results)
             stats = {
-                'total_cases': 3,
-                'active_cases': 3,
-                'evidence_items': 0,
+                'total_cases': len(self.os_results),  # Number of command categories processed
+                'active_cases': len(self.os_results),  # Same as total for live analysis
+                'evidence_items': total_evidence,
                 'analysis_logs': len(self.activity_log),
                 'timestamp': self.timestamp
             }
