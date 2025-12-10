@@ -42,3 +42,13 @@ config/api_keys.json.backup
 *.zip
 *.tar.gz
 *.rar
+
+# Backup files
+*.backup
+*.backup_*
+*_backup_*
+
+# Test outputs
+test_output/
+temp/
+tmp/
