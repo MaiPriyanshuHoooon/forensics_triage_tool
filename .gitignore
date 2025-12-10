@@ -70,9 +70,15 @@ config/api_keys.json.backup
 *.backup
 *.bak
 *.old
+<<<<<<< HEAD
 .backup_
 backup
 _backup.
+=======
+*.backup_*
+*_backup_*
+*_backup.*
+>>>>>>> 96e80ec (feat: added complete build automation for EXE distribution)
 *.swp
 *~
 
