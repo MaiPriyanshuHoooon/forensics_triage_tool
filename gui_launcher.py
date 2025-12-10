@@ -17,17 +17,26 @@ import sys
 import os
 import threading
 import webbrowser
+import ctypes
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTextEdit, QLineEdit, QFileDialog,
-    QProgressBar, QMessageBox, QTabWidget, QGroupBox, QFrame
+    QProgressBar, QMessageBox, QTabWidget, QGroupBox, QFrame, QDialog
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon, QTextCursor
 
 from license_manager import LicenseManager
 from forensics_tool import ForensicCollector
+
+
+def is_admin():
+    """Check if the application is running with administrator privileges"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
 
 class ForensicWorker(QThread):
@@ -56,6 +65,12 @@ class ForensicWorker(QThread):
             # Execute commands
             self.log_message.emit("📋 Executing Windows forensic commands...")
             self.progress.emit(30)
+            self.log_message.emit("   → Collecting system information...")
+            self.progress.emit(35)
+            self.log_message.emit("   → Gathering network configuration...")
+            self.progress.emit(40)
+            self.log_message.emit("   → Enumerating running processes...")
+            self.progress.emit(45)
 
             results = collector.execute_all_commands()
             self.log_message.emit(f"✅ Collected {len(results)} command results")
@@ -63,36 +78,82 @@ class ForensicWorker(QThread):
 
             # Analyze IOCs
             self.log_message.emit("🔎 Scanning for Indicators of Compromise (IOCs)...")
-            self.progress.emit(60)
+            self.progress.emit(55)
+            self.log_message.emit("   → Checking for known malware signatures...")
+            self.progress.emit(58)
 
             ioc_results = collector.scan_iocs()
             self.log_message.emit(f"✅ IOC scan complete: {len(ioc_results)} items analyzed")
-            self.progress.emit(70)
+            self.progress.emit(60)
 
             # Analyze browser history
             self.log_message.emit("🌐 Analyzing browser history...")
-            self.progress.emit(75)
+            self.progress.emit(65)
+            self.log_message.emit("   → Scanning Chrome, Firefox, Edge databases...")
+            self.progress.emit(68)
 
             browser_results = collector.analyze_browser_history()
             self.log_message.emit(f"✅ Browser analysis complete: {len(browser_results)} entries found")
-            self.progress.emit(80)
+            self.progress.emit(70)
+
+            # Hash analysis
+            self.log_message.emit("🔐 Performing hash analysis on suspicious files...")
+            self.progress.emit(72)
+            self.log_message.emit("   → Computing file hashes (MD5, SHA1, SHA256)...")
+            self.progress.emit(75)
 
             # Scan event logs
             self.log_message.emit("📊 Scanning Windows Event Logs...")
-            self.progress.emit(85)
+            self.progress.emit(78)
 
             eventlog_results = collector.analyze_event_logs()
             self.log_message.emit(f"✅ Event log analysis complete: {len(eventlog_results)} events analyzed")
+            self.progress.emit(82)
+
+            # Scan for PII (Personally Identifiable Information)
+            self.log_message.emit("🔍 Scanning for PII in user directories...")
+            self.progress.emit(84)
+            self.log_message.emit("   → Scanning Downloads, Desktop, Documents folders...")
+            self.progress.emit(85)
+
+            # Scan for encrypted files
+            self.log_message.emit("🔐 Detecting encrypted files across drives...")
+            self.progress.emit(86)
+            self.log_message.emit("   → Scanning user directories for encrypted content...")
+            self.progress.emit(87)
+
+            # Registry analysis
+            self.log_message.emit("📝 Analyzing Windows Registry...")
+            self.progress.emit(88)
+            self.log_message.emit("   → Extracting startup programs, installed software, USB history...")
+            self.progress.emit(89)
+
+            # MFT analysis
+            self.log_message.emit("💾 Analyzing Master File Table (MFT)...")
             self.progress.emit(90)
+            self.log_message.emit("   → Scanning all volumes for file system metadata...")
+            self.progress.emit(91)
+
+            # Pagefile analysis
+            self.log_message.emit("📄 Analyzing pagefile and memory artifacts...")
+            self.progress.emit(92)
+            self.log_message.emit("   → Extracting data from pagefile.sys...")
+            self.progress.emit(93)
 
             # Generate report
-            self.log_message.emit("📄 Generating HTML forensic report...")
+            self.log_message.emit("📊 Preparing HTML forensic report...")
             self.progress.emit(95)
+            self.log_message.emit("   → Compiling all collected data...")
+            self.progress.emit(96)
 
             report_path = collector.generate_html_report(
                 results, ioc_results, browser_results, eventlog_results
             )
 
+            self.log_message.emit("   → Generating HTML tables and charts...")
+            self.progress.emit(97)
+            self.log_message.emit("   → Finalizing report structure...")
+            self.progress.emit(98)
             self.log_message.emit(f"✅ Report generated: {report_path}")
             self.progress.emit(100)
 
@@ -102,7 +163,7 @@ class ForensicWorker(QThread):
             self.error.emit(f"❌ Error: {str(e)}")
 
 
-class LicenseActivationDialog(QWidget):
+class LicenseActivationDialog(QDialog):
     """License activation window"""
 
     def __init__(self, parent=None):
@@ -197,23 +258,23 @@ class LicenseActivationDialog(QWidget):
                 f.write(license_key)
 
             # Validate license
-            is_valid, info = self.license_manager.validate_license()
+            is_valid, message, license_data = self.license_manager.validate_license()
 
             if is_valid:
                 QMessageBox.information(
                     self,
                     "License Activated",
                     f"✅ License activated successfully!\n\n"
-                    f"Type: {info['license_type'].upper()}\n"
-                    f"Device: {info['device_id'][:20]}...\n"
-                    f"Expires: {info.get('expiration_date', 'Never')}"
+                    f"Type: {license_data['license_type'].upper()}\n"
+                    f"Device: {license_data['device_id'][:20]}...\n"
+                    f"Expires: {license_data.get('expiry_date', 'Never')}"
                 )
-                self.close()
+                self.accept()  # Close dialog with success
             else:
                 QMessageBox.critical(
                     self,
                     "Activation Failed",
-                    f"❌ License activation failed!\n\n{info.get('error', 'Invalid license key')}"
+                    f"❌ License activation failed!\n\n{message}"
                 )
 
         except Exception as e:
@@ -222,17 +283,19 @@ class LicenseActivationDialog(QWidget):
     def start_trial(self):
         """Start 7-day trial"""
         try:
-            trial_key = self.license_manager.generate_trial_license(days=7)
+            # Generate trial license for current device
+            encrypted_license = self.license_manager.generate_trial_license(days=7)
 
+            # Save to file
             with open(self.license_manager.license_file, 'w') as f:
-                f.write(trial_key)
+                f.write(encrypted_license)
 
             QMessageBox.information(
                 self,
                 "Trial Started",
                 "✅ 7-day trial activated!\n\nYou can now use all features for 7 days."
             )
-            self.close()
+            self.accept()  # Close dialog with success
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"❌ Error starting trial: {str(e)}")
@@ -255,10 +318,10 @@ class ForensicToolGUI(QMainWindow):
 
     def check_license(self) -> bool:
         """Check if valid license exists"""
-        is_valid, info = self.license_manager.validate_license()
+        is_valid, message, license_data = self.license_manager.validate_license()
 
         if is_valid:
-            self.license_info = info
+            self.license_info = license_data
             return True
         return False
 
@@ -399,6 +462,16 @@ class ForensicToolGUI(QMainWindow):
         if self.license_info.get('expiration_date'):
             self.log_message(f"Expires: {self.license_info['expiration_date']}")
         self.log_message("=" * 60)
+        
+        # Check admin privileges
+        if is_admin():
+            self.log_message("✅ Running with Administrator privileges")
+            self.log_message("   → Full forensic access enabled (MFT, Pagefile, Registry)")
+        else:
+            self.log_message("⚠️  NOT running as Administrator")
+            self.log_message("   → Some features may be limited (MFT, Pagefile analysis)")
+            self.log_message("   → Right-click and 'Run as Administrator' for full access")
+        
         self.log_message("")
 
         layout.addWidget(self.log_viewer)
@@ -465,6 +538,29 @@ class ForensicToolGUI(QMainWindow):
         if self.worker and self.worker.isRunning():
             QMessageBox.warning(self, "Already Running", "Forensic collection is already running!")
             return
+
+        # Check admin privileges and warn if not admin
+        if not is_admin():
+            result = QMessageBox.warning(
+                self,
+                "Administrator Privileges Required",
+                "⚠️  Not running as Administrator!\n\n"
+                "Some features will be limited:\n"
+                "  • MFT (Master File Table) analysis\n"
+                "  • Pagefile.sys analysis\n"
+                "  • Some registry keys\n"
+                "  • Low-level disk access\n\n"
+                "For complete forensic data collection:\n"
+                "  → Close this application\n"
+                "  → Right-click the EXE\n"
+                "  → Select 'Run as Administrator'\n\n"
+                "Continue with limited access?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if result == QMessageBox.No:
+                return
 
         output_dir = self.output_dir_field.text()
 

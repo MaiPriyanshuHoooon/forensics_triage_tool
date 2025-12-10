@@ -1,15 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller Build Configuration
-================================
-Builds the forensic tool into a standalone Windows executable
+PyInstaller Build Configuration (DIRECTORY MODE - More Reliable!)
+==================================================================
+Builds as a folder instead of single file - better DLL compatibility
 
 Build command:
-    pyinstaller forensic_tool.spec
+    python -m PyInstaller forensic_tool_onedir.spec
 
 Output:
-    dist/ForensicTool.exe (standalone executable)
+    dist/ForensicTool/ folder containing:
+        - ForensicTool.exe
+        - All DLLs (visible and debuggable)
+        - Python runtime
+        - Dependencies
+
+Advantages:
+    - Better DLL loading (fixes ordinal 380 error)
+    - Easier to debug
+    - More compatible with different Windows versions
+    - Faster builds
 """
+
+import os
 
 block_cipher = None
 
@@ -21,6 +33,7 @@ a = Analysis(
         ('templates', 'templates'),
         ('assets', 'assets'),
         ('config', 'config'),
+        ('core', 'core'),
     ],
     hiddenimports=[
         'PyQt5',
@@ -36,16 +49,12 @@ a = Analysis(
         'requests',
         'pywin32',
         'win32com',
+        'win32com.client',
         'win32api',
         'win32con',
         'pywintypes',
         'wmi',
         'pytsk3',
-        'PyPDF2',
-        'python-docx',
-        'openpyxl',
-        'PIL',
-        'pytesseract',
     ],
     hookspath=[],
     hooksconfig={},
@@ -68,26 +77,37 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Build as directory (NOT single file)
+# This keeps DLLs separate and visible
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    [],  # Empty - don't bundle binaries in exe
+    exclude_binaries=True,  # Keep DLLs separate - KEY FIX!
     name='ForensicTool',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,  # Disabled - can cause DLL issues
     console=False,  # No console window (GUI only)
     disable_windowed_traceback=False,
-    argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icon.ico',  # Add your icon here
-    version_file='version_info.txt',  # Windows version info
+    icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
+    manifest='ForensicTool.manifest',  # ← Request Administrator privileges
+    uac_admin=True,  # ← Force UAC prompt for admin rights
+    uac_uiaccess=False,
+)
+
+# Collect all files into a directory
+coll = COLLECT(
+    exe,
+    a.binaries,  # All DLLs go here
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='ForensicTool',  # Creates dist/ForensicTool/ folder
 )

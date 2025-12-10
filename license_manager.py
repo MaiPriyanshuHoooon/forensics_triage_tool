@@ -371,6 +371,36 @@ class LicenseManager:
                 'license_type': 'NONE'
             }
 
+    def generate_trial_license(self, days: int = 7) -> str:
+        """
+        Generate a trial license for current device
+        
+        Args:
+            days: Number of days for trial (default: 7)
+            
+        Returns:
+            Encrypted license data string
+        """
+        # Get current device ID
+        device_id = self.get_device_id()
+        
+        # Create trial license
+        license_data = self.create_license(
+            license_type="TRIAL",
+            device_id=device_id,
+            days_valid=days,
+            customer_name="Trial User",
+            customer_email="trial@forensic-tool.com"
+        )
+        
+        # Encrypt and return license data
+        encryption_key = self.generate_encryption_key(device_id)
+        fernet = Fernet(encryption_key)
+        license_json = json.dumps(license_data, indent=2)
+        encrypted_data = fernet.encrypt(license_json.encode())
+        
+        return encrypted_data.decode()
+
 
 # ==============================================================================
 # LICENSE GENERATION TOOL (For vendor/admin use only)

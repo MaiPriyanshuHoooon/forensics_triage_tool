@@ -1,21 +1,38 @@
 # Python
-__pycache__/
+_pycache_/
 *.py[cod]
 *$py.class
 *.so
+*.pyo
 .Python
 env/
 venv/
+ENV/
 *.egg-info/
+*.egg
 dist/
 build/
 
-# Forensic Reports (generated files)
+# PyInstaller
+*.spec.bak
+*.manifest.bak
+
+# Forensic output (generated files)
+forensic_output/
+forensic_output_*/
 Forensic_Report_*/
 *.html
 *.log
 *.md
+test_output/
+temp/
+tmp/
 tempCodeRunnerFile.py
+
+# License files (NEVER commit these!)
+*.lic
+forensics_tool.lic
+forensics_tool_*.lic
 
 # IDE
 .vscode/
@@ -23,12 +40,15 @@ tempCodeRunnerFile.py
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Sensitive data
+# Sensitive data (API keys, credentials)
 *.key
 *.pem
 secrets/
@@ -36,19 +56,26 @@ credentials/
 config/api_keys.json
 config/api_keys.json.backup
 *.env
-.env.*
+.env*
 
-# Large files
+# Archives and compressed files
 *.zip
 *.tar.gz
 *.rar
+*.7z
+*.tar
+*.gz
 
-# Backup files
+# Backup and old files
 *.backup
-*.backup_*
-*_backup_*
+*.bak
+*.old
+.backup_
+backup
+_backup.
+*.swp
+*~
 
-# Test outputs
-test_output/
-temp/
-tmp/
+# Documentation build artifacts
+docs/_build/
+site/
