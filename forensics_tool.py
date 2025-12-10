@@ -354,7 +354,8 @@ class ForensicCollector:
             
             # Generate Dashboard Tab
             # Calculate actual statistics from collected data
-            total_evidence = len(self.os_results) + len(self.file_hashes) + len(browser_results)
+            file_hashes = getattr(self, 'file_hashes', [])
+            total_evidence = len(self.os_results) + len(file_hashes) + len(browser_results)
             stats = {
                 'total_cases': len(self.os_results),  # Number of command categories processed
                 'active_cases': len(self.os_results),  # Same as total for live analysis
@@ -368,19 +369,21 @@ class ForensicCollector:
             f.write(generate_os_commands_tab(self.os_results, "Windows"))
             
             # Generate Hash Analysis Tab
-            f.write(generate_hash_tab_interactive(self.file_hashes if self.file_hashes else []))
+            f.write(generate_hash_tab_interactive(file_hashes))
             
             # Generate PII Detection Tab
             f.write(generate_pii_tab(pii_results))
             
             # Generate Browser History Tab
-            f.write(generate_browser_history_tab(browser_results, self.browser_stats))
+            browser_stats = getattr(self, 'browser_stats', {})
+            f.write(generate_browser_history_tab(browser_results, browser_stats))
             
             # Generate Registry Analysis Tab
             f.write(generate_registry_tab(registry_data, registry_stats))
             
             # Generate Event Log Analysis Tab
-            f.write(generate_eventlog_tab(eventlog_results, self.eventlog_stats))
+            eventlog_stats = getattr(self, 'eventlog_stats', {})
+            f.write(generate_eventlog_tab(eventlog_results, eventlog_stats))
             
             # Generate MFT Analysis Tab
             f.write(generate_mft_tab(mft_data, mft_stats))
