@@ -53,6 +53,367 @@ from core.mft_analyzer import MFTAnalyzer
 from core.pagefile_analyzer import PagefileAnalyzer
 
 
+class ForensicCollector:
+    """
+    Forensic data collection class for GUI integration.
+    Wraps the forensic collection functionality into a reusable class.
+    """
+    
+    def __init__(self, output_dir):
+        """
+        Initialize the forensic collector.
+        
+        Args:
+            output_dir (str): Directory to store forensic output and reports
+        """
+        self.output_dir = output_dir
+        self.timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Initialize analyzers
+        self.regex_analyzer = RegexAnalyzer()
+        self.hash_analyzer = HashAnalyzer()
+        self.ioc_scanner = IOCScanner()
+        self.browser_analyzer = BrowserHistoryAnalyzer()
+        self.eventlog_analyzer = EventLogAnalyzer()
+        
+        # Storage for collected data
+        self.all_forensic_data = []
+        self.os_results = {}
+        self.activity_log = []
+    
+    def execute_all_commands(self):
+        """
+        Execute all forensic commands and collect results.
+        
+        Returns:
+            dict: Dictionary of command results organized by category
+        """
+        # Collect command results organized by category
+        for category, cmds in COMMANDS.items():
+            # Skip analysis categories - we'll process them separately
+            if category in ['regex_analysis', 'hash_analysis']:
+                continue
+            
+            self.os_results[category] = []
+            
+            # Process each command in the category
+            for idx, cmd in enumerate(cmds):
+                # Auto-detect and execute
+                output, cmd_type = execute(cmd)
+                
+                # Collect data for regex analysis
+                if output and output.strip() and not output.startswith("❌"):
+                    self.all_forensic_data.append(f"\n=== {category.upper()} - {cmd[:80]} ===\n{output}\n")
+                
+                # Get user-friendly description or fallback to command
+                cmd_description = COMMAND_DESCRIPTIONS.get(cmd, cmd[:100])
+                
+                # Parse output to HTML table
+                if output and output.strip():
+                    table_html = parse_to_table(output, cmd)
+                else:
+                    table_html = '<p class="empty-output">No output or command failed</p>'
+                
+                # Store result
+                self.os_results[category].append({
+                    'description': cmd_description,
+                    'output': table_html,
+                    'type': 'PS' if cmd_type == 'powershell' else 'CMD',
+                    'success': bool(output and output.strip() and not output.startswith("❌"))
+                })
+        
+        # Perform Regex Analysis
+        combined_forensic_text = "\n".join(self.all_forensic_data)
+        regex_results = self.regex_analyzer.analyze_text(combined_forensic_text)
+        
+        # Add to activity log
+        self.activity_log.append({
+            'type': 'regex analysis',
+            'matches': len(regex_results['iocs'])
+        })
+        
+        # Perform Hash Analysis
+        file_hashes = []
+        evidence_dirs = self.hash_analyzer.get_common_evidence_directories()
+        
+        if evidence_dirs:
+            file_hashes = self.hash_analyzer.scan_multiple_directories(
+                evidence_dirs,
+                max_files_per_dir=30,
+                extensions=None
+            )
+        else:
+            # Fallback to current directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            file_hashes = self.hash_analyzer.scan_evidence_directory(
+                current_dir,
+                max_files=20,
+                extensions=['.py', '.txt', '.log', '.json']
+            )
+        
+        # Add to activity log
+        self.activity_log.append({
+            'type': 'hash analysis',
+            'matches': len(file_hashes) if file_hashes else 0
+        })
+        
+        # Store results for report generation
+        self.file_hashes = file_hashes
+        self.regex_results = regex_results
+        
+        return self.os_results
+    
+    def scan_iocs(self):
+        """
+        Perform IOC (Indicators of Compromise) scanning.
+        
+        Returns:
+            dict: IOC scan results with threat assessment
+        """
+        # Perform IOC Scan Analysis
+        combined_forensic_text = "\n".join(self.all_forensic_data)
+        ioc_results = self.ioc_scanner.scan_text(combined_forensic_text)
+        
+        # Add to activity log
+        self.activity_log.append({
+            'type': 'ioc scan analysis',
+            'matches': ioc_results['total_iocs']
+        })
+        
+        # Store for report
+        self.ioc_results = ioc_results
+        
+        return ioc_results
+    
+    def analyze_browser_history(self):
+        """
+        Analyze browser history from all detected browsers.
+        
+        Returns:
+            dict: Browser history data organized by browser
+        """
+        browser_history = {}
+        
+        try:
+            # Get 1 YEAR of history with NO LIMIT on entries
+            browser_history = self.browser_analyzer.analyze_all_browsers(
+                limit=None,      # No limit - get ALL entries
+                days_back=365    # Last 1 year
+            )
+            browser_stats = self.browser_analyzer.get_statistics(browser_history)
+            
+            # Add to activity log
+            self.activity_log.append({
+                'type': 'browser history',
+                'matches': browser_stats.get('total_entries', 0)
+            })
+            
+            # Store for report
+            self.browser_history = browser_history
+            self.browser_stats = browser_stats
+            
+        except Exception as e:
+            # Return empty structure on error
+            self.browser_history = {}
+            self.browser_stats = {}
+        
+        return browser_history
+    
+    def analyze_event_logs(self):
+        """
+        Analyze Windows event logs for security events.
+        
+        Returns:
+            dict: Event log analysis data
+        """
+        eventlog_data = {}
+        
+        try:
+            # Analyze Windows event logs (last 7 days)
+            events = self.eventlog_analyzer.analyze_event_logs(days_back=7, max_events_per_log=5000)
+            eventlog_stats = self.eventlog_analyzer.get_statistics()
+            eventlog_data = self.eventlog_analyzer.generate_report_data()
+            
+            # Add to activity log
+            self.activity_log.append({
+                'type': 'event log analysis',
+                'matches': eventlog_stats.get('total_events', 0)
+            })
+            
+            # Store for report
+            self.eventlog_data = eventlog_data
+            self.eventlog_stats = eventlog_stats
+            
+        except Exception as e:
+            # Return empty structure on error
+            self.eventlog_data = self.eventlog_analyzer.generate_report_data()
+            self.eventlog_stats = self.eventlog_analyzer.get_statistics()
+        
+        return eventlog_data
+    
+    def generate_html_report(self, results, ioc_results, browser_results, eventlog_results):
+        """
+        Generate comprehensive HTML forensic report.
+        
+        Args:
+            results (dict): Command execution results
+            ioc_results (dict): IOC scan results
+            browser_results (dict): Browser history analysis
+            eventlog_results (dict): Event log analysis
+            
+        Returns:
+            str: Path to generated HTML report
+        """
+        html_file = os.path.join(self.output_dir, f"forensic_report_{self.timestamp}.html")
+        
+        # Ensure we have all required data
+        if not hasattr(self, 'file_hashes'):
+            self.file_hashes = []
+        if not hasattr(self, 'regex_results'):
+            self.regex_results = {'iocs': [], 'threat_score': 0, 'threat_level': 'LOW', 'suspicious_patterns': {}}
+        if not hasattr(self, 'browser_stats'):
+            self.browser_stats = {}
+        if not hasattr(self, 'eventlog_stats'):
+            self.eventlog_stats = {}
+        
+        # Perform additional analyses for comprehensive report
+        # PII Detection
+        pii_scanner = FileScanner()
+        pii_results = []
+        try:
+            from pathlib import Path
+            scan_dirs = []
+            for dir_name in ['Downloads', 'Desktop', 'Documents']:
+                dir_path = str(Path.home() / dir_name)
+                if os.path.exists(dir_path):
+                    scan_dirs.append(dir_path)
+            
+            if scan_dirs:
+                pii_results = pii_scanner.scan_specific_directories(scan_dirs, max_files_per_dir=25)
+        except Exception:
+            pass
+        
+        # Encrypted Files Detection
+        encrypted_scanner = EncryptedFileScanner()
+        encrypted_data = {}
+        try:
+            encrypted_files = encrypted_scanner.scan_user_directories(max_files_per_dir=250)
+            encrypted_data = encrypted_scanner.generate_report_data()
+        except Exception:
+            encrypted_data = encrypted_scanner.generate_report_data()
+        
+        # Registry Analysis
+        registry_analyzer = RegistryAnalyzer()
+        registry_data = {}
+        registry_stats = {}
+        try:
+            artifacts = registry_analyzer.analyze_live_registry()
+            registry_stats = registry_analyzer.get_statistics()
+            registry_data = registry_analyzer.generate_report_data()
+        except Exception:
+            registry_data = registry_analyzer.generate_report_data()
+            registry_stats = registry_analyzer.get_statistics()
+        
+        # MFT Analysis
+        mft_analyzer = MFTAnalyzer(volume_path="C:", scan_all_volumes=True)
+        mft_data = {}
+        mft_stats = {}
+        try:
+            mft_data = mft_analyzer.analyze()
+            mft_stats = mft_analyzer.get_statistics()
+        except Exception:
+            mft_data = mft_analyzer._get_unavailable_data()
+            mft_stats = mft_analyzer.get_statistics()
+        
+        # Pagefile Analysis
+        pagefile_analyzer = PagefileAnalyzer()
+        pagefile_data = {}
+        try:
+            pagefile_data = pagefile_analyzer.analyze()
+        except Exception:
+            pagefile_data = pagefile_analyzer._get_unavailable_data()
+        
+        # Generate HTML report
+        assets_path = ""  # Embedded inline
+        
+        with open(html_file, "w", encoding="utf-8") as f:
+            # Write HTML header
+            f.write(generate_html_header(self.timestamp, assets_path))
+            
+            # Generate Dashboard Tab
+            stats = {
+                'total_cases': 3,
+                'active_cases': 3,
+                'evidence_items': 0,
+                'analysis_logs': len(self.activity_log),
+                'timestamp': self.timestamp
+            }
+            f.write(generate_dashboard_tab(stats, self.activity_log, {}))
+            
+            # Generate OS Commands Tab
+            f.write(generate_os_commands_tab(self.os_results, "Windows"))
+            
+            # Generate Hash Analysis Tab
+            f.write(generate_hash_tab_interactive(self.file_hashes if self.file_hashes else []))
+            
+            # Generate PII Detection Tab
+            f.write(generate_pii_tab(pii_results))
+            
+            # Generate Browser History Tab
+            f.write(generate_browser_history_tab(browser_results, self.browser_stats))
+            
+            # Generate Registry Analysis Tab
+            f.write(generate_registry_tab(registry_data, registry_stats))
+            
+            # Generate Event Log Analysis Tab
+            f.write(generate_eventlog_tab(eventlog_results, self.eventlog_stats))
+            
+            # Generate MFT Analysis Tab
+            f.write(generate_mft_tab(mft_data, mft_stats))
+            
+            # Generate Pagefile Analysis Tab
+            f.write(generate_pagefile_tab(pagefile_data))
+            
+            # Generate Encrypted Files Tab
+            f.write(generate_encrypted_files_tab(encrypted_data))
+            
+            # Generate Regex Analysis Tab
+            f.write(f'    <div id="tab-regex" class="tab-content">\n')
+            f.write(f'        <div class="tab-header">\n')
+            f.write(f'            <h1>Regex Pattern Analysis</h1>\n')
+            f.write(f'        </div>\n')
+            f.write(f'        <div class="card">\n')
+            
+            # Generate threat dashboard if critical threats found
+            if self.regex_results['threat_score'] > 50:
+                threat_data = {
+                    'threat_level': self.regex_results['threat_level'],
+                    'threat_score': self.regex_results['threat_score'],
+                    'total_iocs': len(self.regex_results['iocs']),
+                    'critical_findings': len(self.regex_results['suspicious_patterns'].get('CREDENTIALS', [])) +
+                                       len(self.regex_results['suspicious_patterns'].get('MALWARE', [])),
+                    'total_commands': len(self.all_forensic_data),
+                    'files_hashed': len(self.file_hashes) if self.file_hashes else 0
+                }
+                f.write(generate_threat_dashboard(threat_data))
+            
+            regex_html = self.regex_analyzer.generate_report(self.regex_results)
+            f.write(regex_html)
+            f.write(f'        </div>\n')
+            f.write(f'    </div>\n\n')
+            
+            # Generate IOC Scanner Tab
+            f.write(generate_ioc_scanner_tab(ioc_results))
+            
+            # Write HTML footer
+            f.write(generate_html_footer(assets_path))
+        
+        return html_file
+
+
 def run_forensic_collection():
     """Main function to collect forensic data and generate HTML report"""
 
