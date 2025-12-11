@@ -46,7 +46,7 @@ if defined TESSERACT_PATH (
     python -m nuitka ^
         --standalone ^
         --onefile ^
-        --windows-disable-console ^
+        --disable-console ^
         --enable-plugin=pyqt5 ^
         --windows-icon-from-ico=assets/icon.ico ^
         --company-name="Forensic Tools" ^
@@ -78,7 +78,7 @@ if defined TESSERACT_PATH (
     python -m nuitka ^
         --standalone ^
         --onefile ^
-        --windows-disable-console ^
+        --disable-console ^
         --enable-plugin=pyqt5 ^
         --windows-icon-from-ico=assets/icon.ico ^
         --company-name="Forensic Tools" ^
