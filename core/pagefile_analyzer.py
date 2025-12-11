@@ -293,11 +293,17 @@ class PagefileAnalyzer:
         try:
             import subprocess
 
+            # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+            creation_flags = 0
+            if sys.platform == 'win32':
+                creation_flags = subprocess.CREATE_NO_WINDOW
+
             # Create shadow copy
             result = subprocess.run(
                 ['vssadmin', 'create', 'shadow', '/for=C:'],
                 capture_output=True,
-                text=True
+                text=True,
+                creationflags=creation_flags
             )
 
             if result.returncode != 0:

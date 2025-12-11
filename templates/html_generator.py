@@ -6,6 +6,9 @@ Generates HTML structure for forensic reports
 
 import os
 import shutil
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
@@ -30,7 +33,7 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
         with open(css_path, 'r', encoding='utf-8') as f:
             css_content = f.read()
     except Exception as e:
-        print(f"Warning: Could not read CSS file: {e}")
+        logger.warning(f"Could not read CSS file: {e}")
         css_content = "/* CSS file not found */"
 
     # Read JS file
@@ -40,7 +43,7 @@ def generate_html_header(timestamp, assets_path="../assets", os_type="Windows"):
         with open(js_path, 'r', encoding='utf-8') as f:
             js_content = f.read()
     except Exception as e:
-        print(f"Warning: Could not read JS file: {e}")
+        logger.warning(f"Could not read JS file: {e}")
         js_content = "// JS file not found"
 
     return f"""<!DOCTYPE html>
@@ -210,7 +213,7 @@ def generate_html_footer(assets_path="../assets"):
         with open(js_path, 'r', encoding='utf-8') as f:
             js_content = f.read()
     except Exception as e:
-        print(f"Warning: Could not read JS file: {e}")
+        logger.warning(f"Could not read JS file: {e}")
         js_content = "// JS file not found"
 
     return f"""

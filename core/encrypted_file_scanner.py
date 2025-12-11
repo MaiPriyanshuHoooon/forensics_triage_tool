@@ -120,6 +120,11 @@ class EncryptedFileScanner:
     def _is_efs_encrypted_windows(self, file_path):
         """Check if file is encrypted with Windows EFS"""
         try:
+            # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+            creation_flags = 0
+            if sys.platform == 'win32':
+                creation_flags = subprocess.CREATE_NO_WINDOW
+
             # Use PowerShell to check encryption attribute
             cmd = f'powershell -Command "(Get-Item \'{file_path}\').Attributes -match \'Encrypted\'"'
             result = subprocess.run(
@@ -127,7 +132,8 @@ class EncryptedFileScanner:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                creationflags=creation_flags
             )
             return 'True' in result.stdout
         except Exception:
@@ -185,6 +191,11 @@ class EncryptedFileScanner:
         try:
             ext = Path(file_path).suffix.lower()
 
+            # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+            creation_flags = 0
+            if sys.platform == 'win32':
+                creation_flags = subprocess.CREATE_NO_WINDOW
+
             # Check DMG encryption
             if ext == '.dmg':
                 cmd = ['hdiutil', 'isencrypted', file_path]
@@ -192,7 +203,8 @@ class EncryptedFileScanner:
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    creationflags=creation_flags
                 )
                 if 'encrypted: YES' in result.stdout:
                     return True
@@ -203,7 +215,8 @@ class EncryptedFileScanner:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                creationflags=creation_flags
             )
 
             # Look for encryption-related attributes

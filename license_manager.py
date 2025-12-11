@@ -22,12 +22,24 @@ import hashlib
 import uuid
 import platform
 import subprocess
+import logging
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import base64
+
+# Configure logging for professional debugging (silent in GUI mode)
+logging.basicConfig(
+    level=logging.WARNING,  # Only show warnings and errors
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('forensic_tool_license.log'),
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class LicenseManager:
@@ -57,6 +69,11 @@ class LicenseManager:
         identifiers = []
 
         try:
+            # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+            creation_flags = 0
+            if sys.platform == 'win32':
+                creation_flags = subprocess.CREATE_NO_WINDOW
+
             # 1. CPU ID (processor serial number)
             if sys.platform == 'win32':
                 # Windows: WMIC CPU ID
@@ -64,7 +81,8 @@ class LicenseManager:
                     ['wmic', 'cpu', 'get', 'ProcessorId'],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    creationflags=creation_flags
                 )
                 cpu_id = result.stdout.strip().split('\n')[-1].strip()
                 identifiers.append(cpu_id)
@@ -75,7 +93,8 @@ class LicenseManager:
                     ['wmic', 'baseboard', 'get', 'serialnumber'],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    creationflags=creation_flags
                 )
                 mb_serial = result.stdout.strip().split('\n')[-1].strip()
                 identifiers.append(mb_serial)
@@ -91,7 +110,8 @@ class LicenseManager:
                     ['wmic', 'csproduct', 'get', 'uuid'],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    creationflags=creation_flags
                 )
                 system_uuid = result.stdout.strip().split('\n')[-1].strip()
                 identifiers.append(system_uuid)
@@ -100,7 +120,7 @@ class LicenseManager:
             identifiers.append(platform.node())
 
         except Exception as e:
-            print(f"Warning: Could not collect all hardware IDs: {e}")
+            logger.warning(f"Could not collect all hardware IDs: {e}")
 
         # Combine all identifiers and hash
         combined = "|".join(identifiers)
@@ -221,11 +241,9 @@ class LicenseManager:
             f"{license_data['license_id']}|{device_id}".encode()
         ).decode()
 
-        print(f"✅ License saved: {output_file}")
-        print(f"📧 Send this to customer:\n")
-        print(f"   License File: {output_file}")
-        print(f"   Activation Key: {activation_key}")
-        print(f"   Device ID Required: {device_id or 'Will be bound on first run'}")
+        logger.info(f"License saved: {output_file}")
+        logger.info(f"Activation Key: {activation_key}")
+        logger.info(f"Device ID Required: {device_id or 'Will be bound on first run'}")
 
         return activation_key
 
@@ -374,16 +392,16 @@ class LicenseManager:
     def generate_trial_license(self, days: int = 7) -> str:
         """
         Generate a trial license for current device
-        
+
         Args:
             days: Number of days for trial (default: 7)
-            
+
         Returns:
             Encrypted license data string
         """
         # Get current device ID
         device_id = self.get_device_id()
-        
+
         # Create trial license
         license_data = self.create_license(
             license_type="TRIAL",
@@ -392,13 +410,13 @@ class LicenseManager:
             customer_name="Trial User",
             customer_email="trial@forensic-tool.com"
         )
-        
+
         # Encrypt and return license data
         encryption_key = self.generate_encryption_key(device_id)
         fernet = Fernet(encryption_key)
         license_json = json.dumps(license_data, indent=2)
         encrypted_data = fernet.encrypt(license_json.encode())
-        
+
         return encrypted_data.decode()
 
 
@@ -408,9 +426,9 @@ class LicenseManager:
 
 def generate_trial_license():
     """Generate a trial license"""
-    print("="*70)
-    print(" GENERATE TRIAL LICENSE")
-    print("="*70)
+    logger.info("="*70)
+    logger.info(" GENERATE TRIAL LICENSE")
+    logger.info("="*70)
 
     lm = LicenseManager()
 
@@ -419,12 +437,12 @@ def generate_trial_license():
     customer_email = input("Customer Email: ").strip()
 
     # Get device ID from customer
-    print("\n📱 Device ID:")
-    print("   Ask customer to run: python -c \"from license_manager import LicenseManager; print(LicenseManager().get_device_id())\"")
+    logger.info("\n📱 Device ID:")
+    logger.info("   Ask customer to run: python -c \"from license_manager import LicenseManager; print(LicenseManager().get_device_id())\"")
     device_id = input("   Enter Device ID: ").strip().upper()
 
     if not device_id:
-        print("❌ Device ID required!")
+        logger.error("Device ID required!")
         return
 
     # Create license
@@ -440,21 +458,21 @@ def generate_trial_license():
     output_file = f"forensics_tool_trial_{device_id}.lic"
     activation_key = lm.save_license(license_data, output_file)
 
-    print(f"\n📧 SEND TO CUSTOMER:")
-    print(f"   1. License file: {output_file}")
-    print(f"   2. Activation instructions:")
-    print(f"      - Copy {output_file} to tool directory")
-    print(f"      - Rename to: forensics_tool.lic")
-    print(f"      - Run tool normally")
-    print(f"\n⏰ License expires: {license_data['expiry_date']}")
-    print(f"✨ Enabled features: {', '.join(license_data['enabled_features'])}")
+    logger.info(f"\n📧 SEND TO CUSTOMER:")
+    logger.info(f"   1. License file: {output_file}")
+    logger.info(f"   2. Activation instructions:")
+    logger.info(f"      - Copy {output_file} to tool directory")
+    logger.info(f"      - Rename to: forensics_tool.lic")
+    logger.info(f"      - Run tool normally")
+    logger.info(f"\n⏰ License expires: {license_data['expiry_date']}")
+    logger.info(f"✨ Enabled features: {', '.join(license_data['enabled_features'])}")
 
 
 def generate_full_license():
     """Generate a full license"""
-    print("="*70)
-    print(" GENERATE FULL LICENSE")
-    print("="*70)
+    logger.info("="*70)
+    logger.info(" GENERATE FULL LICENSE")
+    logger.info("="*70)
 
     lm = LicenseManager()
 
@@ -464,12 +482,12 @@ def generate_full_license():
     days_valid = int(input("Days Valid (365 for 1 year): ").strip() or "365")
 
     # Get device ID
-    print("\n📱 Device ID:")
-    print("   Ask customer to run: python -c \"from license_manager import LicenseManager; print(LicenseManager().get_device_id())\"")
+    logger.info("\n📱 Device ID:")
+    logger.info("   Ask customer to run: python -c \"from license_manager import LicenseManager; print(LicenseManager().get_device_id())\"")
     device_id = input("   Enter Device ID: ").strip().upper()
 
     if not device_id:
-        print("❌ Device ID required!")
+        logger.error("Device ID required!")
         return
 
     # All features enabled for full license
@@ -499,48 +517,48 @@ def generate_full_license():
     output_file = f"forensics_tool_full_{device_id}.lic"
     activation_key = lm.save_license(license_data, output_file)
 
-    print(f"\n📧 SEND TO CUSTOMER:")
-    print(f"   1. License file: {output_file}")
-    print(f"   2. Activation instructions:")
-    print(f"      - Copy {output_file} to tool directory")
-    print(f"      - Rename to: forensics_tool.lic")
-    print(f"      - Run tool normally")
-    print(f"\n⏰ License expires: {license_data['expiry_date']}")
-    print(f"✨ All features enabled")
+    logger.info(f"\n📧 SEND TO CUSTOMER:")
+    logger.info(f"   1. License file: {output_file}")
+    logger.info(f"   2. Activation instructions:")
+    logger.info(f"      - Copy {output_file} to tool directory")
+    logger.info(f"      - Rename to: forensics_tool.lic")
+    logger.info(f"      - Run tool normally")
+    logger.info(f"\n⏰ License expires: {license_data['expiry_date']}")
+    logger.info(f"✨ All features enabled")
 
 
 def check_license():
     """Check current license status"""
-    print("="*70)
-    print(" LICENSE STATUS")
-    print("="*70)
+    logger.info("="*70)
+    logger.info(" LICENSE STATUS")
+    logger.info("="*70)
 
     lm = LicenseManager()
 
     # Show device ID
     device_id = lm.get_device_id()
-    print(f"\n📱 This Device ID: {device_id}")
-    print(f"   (Share this with vendor to get license)")
+    logger.info(f"\n📱 This Device ID: {device_id}")
+    logger.info(f"   (Share this with vendor to get license)")
 
     # Check license
     info = lm.get_license_info()
 
-    print(f"\n📄 License Status:")
+    logger.info(f"\n📄 License Status:")
     if info['valid']:
-        print(f"   ✅ Status: VALID")
-        print(f"   📛 Type: {info['license_type']}")
-        print(f"   👤 Customer: {info['customer_name']}")
-        print(f"   🆔 License ID: {info['license_id']}")
-        print(f"   📅 Expires: {info['expiry_date']} ({info['days_remaining']} days remaining)")
-        print(f"\n   ✨ Enabled Features:")
+        logger.info(f"   ✅ Status: VALID")
+        logger.info(f"   📛 Type: {info['license_type']}")
+        logger.info(f"   👤 Customer: {info['customer_name']}")
+        logger.info(f"   🆔 License ID: {info['license_id']}")
+        logger.info(f"   📅 Expires: {info['expiry_date']} ({info['days_remaining']} days remaining)")
+        logger.info(f"\n   ✨ Enabled Features:")
         for feature in info['enabled_features']:
-            print(f"      • {feature}")
+            logger.info(f"      • {feature}")
     else:
-        print(f"   ❌ Status: {info['message']}")
-        print(f"\n   💡 To activate:")
-        print(f"      1. Contact vendor with Device ID: {device_id}")
-        print(f"      2. Receive license file: forensics_tool.lic")
-        print(f"      3. Place in tool directory")
+        logger.info(f"   ❌ Status: {info['message']}")
+        logger.info(f"\n   💡 To activate:")
+        logger.info(f"      1. Contact vendor with Device ID: {device_id}")
+        logger.info(f"      2. Receive license file: forensics_tool.lic")
+        logger.info(f"      3. Place in tool directory")
 
 
 if __name__ == '__main__':
@@ -550,11 +568,11 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python license_manager.py check          - Check license status")
-        print("  python license_manager.py device_id      - Show device ID")
-        print("  python license_manager.py trial          - Generate trial license (vendor only)")
-        print("  python license_manager.py full           - Generate full license (vendor only)")
+        logger.info("Usage:")
+        logger.info("  python license_manager.py check          - Check license status")
+        logger.info("  python license_manager.py device_id      - Show device ID")
+        logger.info("  python license_manager.py trial          - Generate trial license (vendor only)")
+        logger.info("  python license_manager.py full           - Generate full license (vendor only)")
         sys.exit(1)
 
     command = sys.argv[1].lower()
@@ -564,10 +582,11 @@ if __name__ == '__main__':
     elif command == 'device_id':
         lm = LicenseManager()
         device_id = lm.get_device_id()
-        print(f"Device ID: {device_id}")
+        logger.info(f"Device ID: {device_id}")
     elif command == 'trial':
         generate_trial_license()
     elif command == 'full':
         generate_full_license()
     else:
-        print(f"Unknown command: {command}")
+        logger.error(f"Unknown command: {command}")
+

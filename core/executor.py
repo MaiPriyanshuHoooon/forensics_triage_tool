@@ -94,8 +94,17 @@ def run_as_admin():
 def execute_cmd(cmd):
     """Execute Command Prompt (cmd.exe) commands"""
     try:
+        # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = subprocess.CREATE_NO_WINDOW
+
         return subprocess.check_output(
-            cmd, shell=True, text=True, stderr=subprocess.STDOUT  # No timeout - runs until complete
+            cmd,
+            shell=True,
+            text=True,
+            stderr=subprocess.STDOUT,
+            creationflags=creation_flags  # No timeout - runs until complete
         )
     except subprocess.CalledProcessError as e:
         # More detailed error message
@@ -111,6 +120,11 @@ def execute_cmd(cmd):
 def execute_powershell(cmd):
     """Execute PowerShell commands"""
     try:
+        # Windows-specific: CREATE_NO_WINDOW flag to prevent console popup
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = subprocess.CREATE_NO_WINDOW
+
         powershell_cmd = [
             'powershell.exe',
             '-NoProfile',
@@ -122,7 +136,8 @@ def execute_powershell(cmd):
         result = subprocess.check_output(
             powershell_cmd,
             text=True,
-            stderr=subprocess.STDOUT  # No timeout - runs until complete
+            stderr=subprocess.STDOUT,
+            creationflags=creation_flags  # No timeout - runs until complete
         )
         return result
     except subprocess.CalledProcessError as e:
